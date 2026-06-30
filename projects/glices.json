@@ -1,0 +1,15 @@
+{
+  "name": "Glices Project",
+  "trello": {
+    "targetListId": "65818e69818e69818e69818e",
+    "doneListId": "65818e69818e69818e69818f",
+    "key": "your_trello_key_here",
+    "token": "your_trello_token_here",
+    "secret": "your_trello_secret_here",
+    "callbackUrl": "https://your-server.com/webhook"
+  },
+  "repos": [
+    "git@github.com:phoenix-fr/glices-api.git",
+    "git@github.com:phoenix-fr/glices-bo.git"
+  ]
+}

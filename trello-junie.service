@@ -1,0 +1,14 @@
+[Unit]
+Description=Trello Junie Bridge Service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/glices/glices-api/trello-bridge
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+EnvironmentFile=/var/www/glices/glices-api/trello-bridge/.env
+
+[Install]
+WantedBy=multi-user.target
