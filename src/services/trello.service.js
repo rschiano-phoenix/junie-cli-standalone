@@ -22,11 +22,19 @@ class TrelloService {
     }
 
     async moveCard(cardId, listId, credentials) {
+        if (config.DRY_RUN) {
+            console.log(`[Trello] [DRY RUN] Would move card ${cardId} to list ${listId}`);
+            return { status: 200, data: {} };
+        }
         const { key, token } = credentials;
         return axios.put(`https://api.trello.com/1/cards/${cardId}?key=${key}&token=${token}`, { idList: listId });
     }
 
     async addComment(cardId, text, credentials) {
+        if (config.DRY_RUN) {
+            console.log(`[Trello] [DRY RUN] Would add comment to card ${cardId}: ${text}`);
+            return { status: 200, data: {} };
+        }
         const { key, token } = credentials;
         return axios.post(`https://api.trello.com/1/cards/${cardId}/actions/comments?key=${key}&token=${token}`, { text });
     }

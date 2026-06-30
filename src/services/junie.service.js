@@ -1,8 +1,20 @@
 const { spawn } = require('child_process');
 const path = require('path');
+const config = require('../config/config');
 
 class JunieService {
     async run(repoPath, card, apiKey) {
+        if (config.DRY_RUN) {
+            const timestamp = new Date().toISOString();
+            console.log(`[${timestamp}] [DRY RUN] Starting Junie in: ${repoPath}`);
+            console.log(`[Junie] [DRY RUN] Command: junie --auth ${apiKey.substring(0, 5)}... --brave "${card.desc || card.name}"`);
+            return {
+                code: 0,
+                cost: '$0.00 (Dry Run)',
+                tokens: '0 (Dry Run)',
+                repo: path.basename(repoPath)
+            };
+        }
         return new Promise((resolve) => {
             const timestamp = new Date().toISOString();
             console.log(`[${timestamp}] Starting Junie in: ${repoPath}`);

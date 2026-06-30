@@ -17,6 +17,10 @@ class GitService {
 
     cleanProjectWorkspace(projectName) {
         const projectPath = path.join(this.workspaceDir, projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase());
+        if (config.DRY_RUN) {
+            console.log(`[Git] [DRY RUN] Would clean workspace: ${projectPath}`);
+            return projectPath;
+        }
         if (fs.existsSync(projectPath)) {
             console.log(`[Git] Cleaning workspace: ${projectPath}`);
             fs.rmSync(projectPath, { recursive: true, force: true });
@@ -27,6 +31,10 @@ class GitService {
 
     async runCommand(command, cwd) {
         try {
+            if (config.DRY_RUN) {
+                console.log(`[Git] [DRY RUN] Executing: ${command} in ${cwd || 'root'}`);
+                return true;
+            }
             console.log(`[Git] Executing: ${command} in ${cwd || 'root'}`);
             execSync(command, { cwd, stdio: 'inherit' });
             return true;

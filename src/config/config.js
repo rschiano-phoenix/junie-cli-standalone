@@ -11,6 +11,7 @@ module.exports = {
     JUNIE: {
         API_KEY: process.env.JUNIE_API_KEY,
     },
+    DRY_RUN: process.env.DRY_RUN === 'true',
     PORT: process.env.PORT || 3000,
     PATHS: {
         PROJECTS_DIR: path.join(process.cwd(), 'projects'),

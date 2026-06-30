@@ -5,4 +5,7 @@ const PORT = config.PORT;
 
 app.listen(PORT, () => {
     console.log(`[${new Date().toISOString()}] Trello-Junie Bridge listening on port ${PORT}`);
+    if (config.DRY_RUN) {
+        console.log(`[${new Date().toISOString()}] !!! DRY RUN MODE ENABLED !!!`);
+    }
 });

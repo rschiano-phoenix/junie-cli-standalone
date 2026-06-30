@@ -30,6 +30,10 @@ Les services encapsulent la logique métier pour chaque intégration externe :
 - **`git.service.js`** : Responsable des opérations Git. Il nettoie le workspace, clone les dépôts, se place sur la branche `develop` et crée une branche spécifique pour le ticket Trello.
 - **`junie.service.js`** : Orchestre l'exécution de Junie CLI via des sous-processus. Il capture la sortie pour extraire les métriques de consommation (coût, tokens).
 
+### Mode Dry Run
+
+Si la variable d'environnement `DRY_RUN` est définie à `true`, le bridge simulera les opérations Git, Junie et Trello (déplacement de cartes, ajout de commentaires) sans les exécuter réellement. Les commandes et actions prévues seront affichées dans les logs du serveur. C'est idéal pour tester la configuration sans modifier vos dépôts ou vos tableaux Trello.
+
 ### 3. Contrôleur (`src/controllers/webhook.controller.js`)
 C'est le "cerveau" du projet. Il reçoit les webhooks Trello et coordonne les services :
 1. Valide la signature de la requête.

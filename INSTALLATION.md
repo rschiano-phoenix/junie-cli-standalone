@@ -22,6 +22,7 @@ C'est la méthode la plus simple car elle inclut toutes les dépendances (Junie 
    cp .docker/.env.example .env
    ```
    Éditez `.env` avec vos informations (notamment `JUNIE_API_KEY` et `TRELLO_CALLBACK_URL`).
+   Vous pouvez également activer le mode simulation en ajoutant `DRY_RUN=true`.
 
 3. **Lancer le service** :
    ```bash
