@@ -156,22 +156,22 @@ Je commence tout de suite ! 🚀`;
                 const result = await junieService.run(setup.localPath, instruction, apiKey);
                 
                 if (result.code === 0) {
-                    // Indexation de tous les changements (y compris les nouveaux fichiers) pour un diff et commit précis
-                    await gitService.add(setup.localPath);
-
-                    // Récupération des statistiques du diff avant de revenir sur la branche de base
-                    result.diffStat = await gitService.getDiffStat(setup.localPath, baseBranch);
-
-                    // Commit & Push
+                    // Commit des changements (inclut git add -A en interne)
                     const commitMsg = `Junie: ${card.name} (Trello #${card.idShort})`;
                     const committed = await gitService.commit(setup.localPath, commitMsg);
 
-                    if (!committed) {
+                    if (committed) {
+                        // Récupération des statistiques du diff après le commit
+                        result.diffStat = await gitService.getDiffStat(setup.localPath, baseBranch);
+                        
+                        // Push des changements sur la branche distante
+                        if (!await gitService.push(setup.localPath, branchName)) {
+                            result.code = 1;
+                            result.error = 'Push Git impossible';
+                        }
+                    } else {
                         result.code = 1;
-                        result.error = 'Commit Git impossible';
-                    } else if (!await gitService.push(setup.localPath, branchName)) {
-                        result.code = 1;
-                        result.error = 'Push Git impossible';
+                        result.error = 'Commit Git impossible (aucun changement ou erreur)';
                     }
 
                     // Retour sur branche de base

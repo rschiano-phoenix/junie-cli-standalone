@@ -101,8 +101,8 @@ class GitService {
     }
 
     async push(cwd, branchName) {
-        // Pas de force push (-f)
-        return this.runCommand('git', ['push', 'origin', branchName], cwd);
+        // On utilise -u pour lier la branche à l'origin
+        return this.runCommand('git', ['push', '-u', 'origin', branchName], cwd);
     }
 
     async checkout(cwd, branchName) {
@@ -131,6 +131,8 @@ class GitService {
             if (!await this.runCommand('git', ['checkout', '-b', branchName], localPath)) {
                 return { success: false, repoName, error: `Failed to create branch ${branchName}` };
             }
+            // Pousser la branche immédiatement sur le dépôt distant
+            await this.push(localPath, branchName);
         }
 
         return { success: true, repoName, localPath };
