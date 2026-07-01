@@ -26,7 +26,7 @@ class JunieService {
             const junie = spawn('junie', ['--auth', apiKey, '--brave', instruction], {
                 cwd: repoPath,
                 env: { ...process.env, JUNIE_API_KEY: apiKey },
-                timeout: config.GIT.COMMAND_TIMEOUT_MS,
+                timeout: config.JUNIE.COMMAND_TIMEOUT_MS,
             });
 
             let output = '';
@@ -48,18 +48,28 @@ class JunieService {
                 });
             });
 
-            junie.on('close', (code) => {
-                console.log(`[Junie] Process exited with code ${code}`);
-                // Regex plus flexibles pour capturer les coûts et tokens
-                // Junie peut afficher : "Total cost: $0.12" ou "Total tokens: 1,234"
-                const costMatch = output.match(/Total cost[:\s]+(\$[\d.,]+)/i);
-                const tokensMatch = output.match(/Total tokens[:\s]+([\d.,]+)/i);
+            junie.on('close', (code, signal) => {
+                console.log(`[Junie] Process exited with code ${code}, signal ${signal}`);
+                
+                // Extraction plus robuste des coûts et tokens (capture tout jusqu'à la fin de ligne)
+                const costMatch = output.match(/Total cost[:\s]+([^\r\n]+)/i);
+                const tokensMatch = output.match(/Total tokens[:\s]+([^\r\n]+)/i);
+
+                let error = null;
+                if (code !== 0) {
+                    if (signal === 'SIGTERM') {
+                        error = `Dépassement du temps imparti (${config.JUNIE.COMMAND_TIMEOUT_MS / 1000}s)`;
+                    } else {
+                        error = `Code de sortie ${code}${signal ? ' (Signal ' + signal + ')' : ''}`;
+                    }
+                }
 
                 resolve({
-                    code,
-                    cost: costMatch ? costMatch[1] : '0.00$',
-                    tokens: tokensMatch ? tokensMatch[1].replace(/,/g, '') : '0',
+                    code: code === null ? 1 : code,
+                    cost: costMatch ? costMatch[1].trim() : '0.00$',
+                    tokens: tokensMatch ? tokensMatch[1].trim() : '0',
                     repo: path.basename(repoPath),
+                    error,
                     output,
                 });
             });

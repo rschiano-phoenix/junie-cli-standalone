@@ -23,6 +23,7 @@ const config = {
     },
     JUNIE: {
         API_KEY: readEnv('JUNIE_API_KEY'),
+        COMMAND_TIMEOUT_MS: Number(readEnv('JUNIE_COMMAND_TIMEOUT_MS', 1800000)), // 30 minutes par défaut
     },
     GIT: {
         SSH_COMMAND: readEnv('GIT_SSH_COMMAND'),
