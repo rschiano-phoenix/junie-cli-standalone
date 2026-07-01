@@ -114,7 +114,6 @@ Je commence tout de suite ! 🚀`;
             }
 
             const projectWorkspace = gitService.cleanProjectWorkspace(projectKey);
-            await trelloService.addComment(cardId, `📁 L'espace de travail est prêt, je commence le traitement des dépôts.`, credentials);
             
             const results = [];
 
@@ -126,24 +125,29 @@ Je commence tout de suite ! 🚀`;
                     continue;
                 }
 
-                await trelloService.addComment(cardId, `🔍 J'analyse et je modifie le code sur le dépôt **${setup.repoName}**...`, credentials);
+                // Mesure de la consommation avant l'exécution
+                const beforeUsage = await junieService.getUsage(apiKey);
 
                 const result = await junieService.run(setup.localPath, card, apiKey);
+
+                // Mesure de la consommation après l'exécution
+                const afterUsage = await junieService.getUsage(apiKey);
+
+                // Calcul de la différence réelle consommée
+                const consumedCost = Math.max(0, afterUsage.cost - beforeUsage.cost);
+                const consumedTokens = Math.max(0, afterUsage.tokens - beforeUsage.tokens);
+
+                // Mise à jour du résultat avec les valeurs réelles
+                result.cost = `$${consumedCost.toFixed(2)}`;
+                result.tokens = consumedTokens.toString();
                 
                 if (result.code === 0) {
-                    await trelloService.addComment(cardId, `🛠️ Junie a terminé ses modifications sur **${setup.repoName}**. Je synchronise tout ça...`, credentials);
-                    
                     // Commit & Push
                     const commitMsg = `Junie: ${card.name} (Trello #${card.idShort})`;
                     const committed = await gitService.commit(setup.localPath, commitMsg);
                     
                     if (committed) {
-                        const pushed = await gitService.push(setup.localPath, branchName);
-                        if (pushed) {
-                            await trelloService.addComment(cardId, `📤 Les modifications ont été poussées sur la branche \`${branchName}\` de **${setup.repoName}**.`, credentials);
-                        } else {
-                            await trelloService.addComment(cardId, `⚠️ Petit souci lors du push sur **${setup.repoName}**, mais les changements sont commités localement.`, credentials);
-                        }
+                        await gitService.push(setup.localPath, branchName);
                     }
 
                     // Retour sur develop
