@@ -16,14 +16,16 @@ class TrelloService {
     }
 
     async getCard(cardId, credentials) {
-        const { key, token } = credentials;
-        const response = await axios.get(`https://api.trello.com/1/cards/${cardId}?key=${key}&token=${token}`);
+        const response = await axios.get(`https://api.trello.com/1/cards/${encodeURIComponent(cardId)}`, {
+            params: this.buildAuthParams(credentials),
+        });
         return response.data;
     }
 
     async getBoardLists(boardId, credentials) {
-        const { key, token } = credentials;
-        const response = await axios.get(`https://api.trello.com/1/boards/${boardId}/lists?key=${key}&token=${token}`);
+        const response = await axios.get(`https://api.trello.com/1/boards/${encodeURIComponent(boardId)}/lists`, {
+            params: this.buildAuthParams(credentials),
+        });
         return response.data;
     }
 
@@ -38,8 +40,9 @@ class TrelloService {
             console.log(`[Trello] [DRY RUN] Would move card ${cardId} to list ${listId}`);
             return { status: 200, data: {} };
         }
-        const { key, token } = credentials;
-        return axios.put(`https://api.trello.com/1/cards/${cardId}?key=${key}&token=${token}`, { idList: listId });
+        return axios.put(`https://api.trello.com/1/cards/${encodeURIComponent(cardId)}`, { idList: listId }, {
+            params: this.buildAuthParams(credentials),
+        });
     }
 
     async addComment(cardId, text, credentials) {
@@ -47,8 +50,16 @@ class TrelloService {
             console.log(`[Trello] [DRY RUN] Would add comment to card ${cardId}: ${text}`);
             return { status: 200, data: {} };
         }
-        const { key, token } = credentials;
-        return axios.post(`https://api.trello.com/1/cards/${cardId}/actions/comments?key=${key}&token=${token}`, { text });
+        return axios.post(`https://api.trello.com/1/cards/${encodeURIComponent(cardId)}/actions/comments`, { text }, {
+            params: this.buildAuthParams(credentials),
+        });
+    }
+
+    buildAuthParams(credentials) {
+        return {
+            key: credentials.key,
+            token: credentials.token,
+        };
     }
 
     getAuthUrl() {

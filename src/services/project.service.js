@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const config = require('../config/config');
+const { maskSecret } = require('../utils/format');
 
 class ProjectService {
     constructor() {
@@ -39,12 +40,12 @@ class ProjectService {
         const creds = config.getTrelloCredentials(project);
         const idModel = project.trello?.boardId || project.trello?.targetListId;
         
-        const key = creds.key || '<VOTRE_TRELLO_KEY>';
-        const token = creds.token || '<VOTRE_TRELLO_TOKEN>';
+        const key = creds.key ? maskSecret(creds.key) : '<VOTRE_TRELLO_KEY>';
+        const token = creds.token ? maskSecret(creds.token) : '<VOTRE_TRELLO_TOKEN>';
         const callbackUrl = creds.callbackUrl || '<VOTRE_TRELLO_CALLBACK_URL>';
 
         console.log(`[Dry Run] [Projet: ${project.name || 'Inconnu'}] Commande pour créer le webhook Trello :`);
-        
+        console.log('[Dry Run] Les secrets sont masqués dans les logs. Remplacez les valeurs TRELLO_KEY/TRELLO_TOKEN si vous copiez cette commande.');
         console.log(`curl -X POST -H "Content-Type: application/json" \\
   "https://api.trello.com/1/webhooks/?key=${key}&token=${token}" \\
   -d '{
@@ -61,6 +62,7 @@ class ProjectService {
         
         for (const project of projects) {
             const projectKey = project.name || project.trello.boardId || 'unknown';
+            const baseBranch = project.baseBranch || 'develop';
 
             if (config.DRY_RUN) {
                 this.logWebhookCommand(project);
@@ -78,8 +80,7 @@ class ProjectService {
                 const cloned = await gitService.runCommand('git', ['clone', repoUrl, localPath]);
                 
                 if (cloned) {
-                    // On se place par défaut sur develop pour être prêt
-                    await gitService.runCommand('git', ['checkout', 'develop'], localPath);
+                    await gitService.runCommand('git', ['checkout', baseBranch], localPath);
                 }
             }
         }

@@ -191,7 +191,7 @@ La configuration Trello est volontairement séparée :
 
 Pour que Trello envoie les événements au bridge, vous devez créer un webhook manuellement (une seule fois par projet).
 
-> **Astuce** : Si vous lancez le bridge avec `DRY_RUN=true`, il affichera automatiquement dans les logs la commande `curl` exacte à exécuter pour chacun de vos projets configurés.
+> **Astuce** : Si vous lancez le bridge avec `DRY_RUN=true`, il affichera automatiquement dans les logs une commande `curl` prête à compléter pour chacun de vos projets configurés. Par sécurité, la clé et le token Trello sont masqués dans les logs : remplacez-les par vos valeurs réelles uniquement au moment d'exécuter la commande.
 
 ```bash
 curl -X POST -H "Content-Type: application/json" \

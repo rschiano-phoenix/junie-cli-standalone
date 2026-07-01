@@ -2,6 +2,7 @@ const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const config = require('../config/config');
+const { sanitizeName } = require('../utils/format');
 
 class GitService {
     constructor() {
@@ -16,7 +17,7 @@ class GitService {
     }
 
     cleanProjectWorkspace(projectName) {
-        const projectPath = path.join(this.workspaceDir, projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase());
+        const projectPath = path.join(this.workspaceDir, sanitizeName(projectName));
         if (config.DRY_RUN) {
             console.log(`[Git] [DRY RUN] Would clean workspace: ${projectPath}`);
             return projectPath;
@@ -32,7 +33,7 @@ class GitService {
     async runCommand(command, args = [], cwd) {
         try {
             if (config.DRY_RUN) {
-                console.log(`[Git] [DRY RUN] Executing: ${command} ${args.join(' ')} in ${cwd || 'root'}`);
+                console.log(`[Git] [DRY RUN] Executing: ${this.formatCommand(command, args)} in ${cwd || 'root'}`);
                 return true;
             }
 
@@ -42,7 +43,7 @@ class GitService {
             }
 
             const env = this.buildGitEnvironment();
-            console.log(`[Git] Executing: ${command} ${args.join(' ')} in ${cwd || 'root'}`);
+            console.log(`[Git] Executing: ${this.formatCommand(command, args)} in ${cwd || 'root'}`);
             const result = spawnSync(command, args, {
                 cwd,
                 env,
@@ -58,6 +59,13 @@ class GitService {
             }
             return false;
         }
+    }
+
+    formatCommand(command, args = []) {
+        return [command, ...args].map(arg => {
+            const value = String(arg);
+            return /\s/.test(value) ? JSON.stringify(value) : value;
+        }).join(' ');
     }
 
     buildGitEnvironment() {
@@ -84,7 +92,7 @@ class GitService {
     }
 
     async commit(cwd, message) {
-        await this.runCommand('git', ['add', '.'], cwd);
+        if (!await this.runCommand('git', ['add', '.'], cwd)) return false;
         return this.runCommand('git', ['commit', '-m', message], cwd);
     }
 
@@ -122,13 +130,15 @@ class GitService {
     async getDiffStat(cwd, branchName, baseBranch = 'develop') {
         try {
             if (config.DRY_RUN) return "1 file changed, 10 insertions(+), 5 deletions(-)";
-            
+
             const env = this.buildGitEnvironment();
             const result = spawnSync('git', ['diff', '--stat', baseBranch, branchName], {
                 cwd,
                 env,
-                encoding: 'utf8'
+                encoding: 'utf8',
+                timeout: config.GIT.COMMAND_TIMEOUT_MS,
             });
+            if (result.error) throw result.error;
             return result.stdout.trim() || "Aucun changement détecté par git diff.";
         } catch (e) {
             return "Erreur lors de la récupération des statistiques diff.";

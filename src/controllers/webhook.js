@@ -3,6 +3,7 @@ const projectService = require('../services/project.service');
 const trelloService = require('../services/trello.service');
 const gitService = require('../services/git.service');
 const junieService = require('../services/junie.service');
+const { parseCurrency, parseInteger } = require('../utils/format');
 
 class WebhookController {
     constructor() {
@@ -135,9 +136,13 @@ Je commence tout de suite ! 🚀`;
                     // Commit & Push
                     const commitMsg = `Junie: ${card.name} (Trello #${card.idShort})`;
                     const committed = await gitService.commit(setup.localPath, commitMsg);
-                    
-                    if (committed) {
-                        await gitService.push(setup.localPath, branchName);
+
+                    if (!committed) {
+                        result.code = 1;
+                        result.error = 'Commit Git impossible';
+                    } else if (!await gitService.push(setup.localPath, branchName)) {
+                        result.code = 1;
+                        result.error = 'Push Git impossible';
                     }
 
                     // Retour sur branche de base
@@ -164,14 +169,8 @@ Je commence tout de suite ! 🚀`;
         let totalTokens = 0;
         
         results.forEach(r => {
-            if (r.cost && typeof r.cost === 'string') {
-                const val = parseFloat(r.cost.replace(/[^\d.]/g, ''));
-                if (!isNaN(val)) totalCost += val;
-            }
-            if (r.tokens) {
-                const val = parseInt(r.tokens.toString().replace(/[^\d]/g, ''), 10);
-                if (!isNaN(val)) totalTokens += val;
-            }
+            totalCost += parseCurrency(r.cost);
+            totalTokens += parseInteger(r.tokens);
         });
 
         const summary = results.map(r => {

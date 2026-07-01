@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const trelloService = require('../services/trello.service');
 
 class AuthController {
@@ -30,7 +32,6 @@ class AuthController {
         <div id="result" style="display:none;">
             <p class="success">Authentification réussie !</p>
             <p>Le token a été automatiquement enregistré sur le serveur.</p>
-            <code id="token"></code>
         </div>
         <div id="error" style="display:none; color: #eb5a46;">
             <p id="error-message">Impossible de trouver le token dans l'URL.</p>
@@ -51,7 +52,6 @@ class AuthController {
                 document.getElementById('loading').style.display = 'none';
                 if (data.success) {
                     document.getElementById('result').style.display = 'block';
-                    document.getElementById('token').textContent = token;
                 } else {
                     document.getElementById('error').style.display = 'block';
                     document.getElementById('error-message').textContent = "Erreur lors de l'enregistrement du token.";
@@ -75,12 +75,12 @@ class AuthController {
 
     async saveToken(req, res) {
         const { token } = req.body;
-        if (!token) return res.status(400).json({ success: false, error: 'Token missing' });
-        
+        if (!token || typeof token !== 'string' || token.length < 16) {
+            return res.status(400).json({ success: false, error: 'Token missing or invalid' });
+        }
+
         try {
-            const fs = require('fs');
-            const path = require('path');
-            fs.writeFileSync(path.join(process.cwd(), '.trello_token'), token, 'utf8');
+            fs.writeFileSync(path.join(process.cwd(), '.trello_token'), token, { encoding: 'utf8', mode: 0o600 });
             console.log(`[Auth] Trello token saved successfully.`);
             res.json({ success: true });
         } catch (err) {
