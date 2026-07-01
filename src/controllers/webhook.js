@@ -178,8 +178,8 @@ Je commence tout de suite ! 🚀`;
                         result.error = 'Commit Git impossible (aucun changement ou erreur)';
                     }
 
-                    // Retour sur branche de base
-                    await gitService.checkout(setup.localPath, baseBranch);
+                    // Retour sur branche de base (en forçant pour être sûr)
+                    await gitService.checkout(setup.localPath, baseBranch, true);
                 }
 
                 results.push(result);

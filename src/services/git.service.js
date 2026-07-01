@@ -132,9 +132,17 @@ class GitService {
         return result.success;
     }
 
-    async checkout(cwd, branchName) {
-        const result = await this.runCommand('git', ['checkout', branchName], cwd);
+    async checkout(cwd, branchName, force = false) {
+        const args = ['checkout'];
+        if (force) args.push('-f');
+        args.push(branchName);
+        const result = await this.runCommand('git', args, cwd);
         return result.success;
+    }
+
+    async reset(cwd) {
+        await this.runCommand('git', ['reset', '--hard', 'HEAD'], cwd);
+        await this.runCommand('git', ['clean', '-fd'], cwd);
     }
 
     async setupRepo(repoUrl, projectWorkspace, branchName, baseBranch = 'develop') {
@@ -145,6 +153,8 @@ class GitService {
         // 1. Clone or Fetch
         if (fs.existsSync(gitDir)) {
             console.log(`[Git] Dépôt déjà présent, récupération des mises à jour pour ${repoName}...`);
+            // Nettoyage avant de commencer pour éviter les conflits de checkout
+            await this.reset(localPath);
             const fetch = await this.runCommand('git', ['fetch', 'origin'], localPath);
             if (!fetch.success) {
                 return { success: false, repoName, error: `Fetch failed: ${fetch.stderr || fetch.error}` };
@@ -158,12 +168,12 @@ class GitService {
         }
 
         // 2. Tenter de réutiliser la branche si elle existe
-        // On essaie d'abord un checkout simple (marche si locale ou unique sur remote)
-        let checkoutBranch = await this.runCommand('git', ['checkout', branchName], localPath);
+        // On essaie d'abord un checkout force (écrase les modifs locales si elles existent encore)
+        let checkoutBranch = await this.runCommand('git', ['checkout', '-f', branchName], localPath);
         
         // Si ça échoue, on tente de la traquer explicitement depuis origin
         if (!checkoutBranch.success) {
-            checkoutBranch = await this.runCommand('git', ['checkout', '-t', `origin/${branchName}`], localPath);
+            checkoutBranch = await this.runCommand('git', ['checkout', '-f', '-t', `origin/${branchName}`], localPath);
         }
 
         if (checkoutBranch.success) {
@@ -178,7 +188,7 @@ class GitService {
         // 3. Sinon, on repart de la branche de base pour la créer
         console.log(`[Git] Branche ${branchName} non trouvée, création à partir de ${baseBranch}...`);
         
-        const checkoutBase = await this.runCommand('git', ['checkout', baseBranch], localPath);
+        const checkoutBase = await this.runCommand('git', ['checkout', '-f', baseBranch], localPath);
         if (!checkoutBase.success) {
             return { success: false, repoName, error: `Checkout ${baseBranch} failed: ${checkoutBase.stderr || checkoutBase.error}` };
         }
@@ -192,7 +202,7 @@ class GitService {
             // Si l'erreur est "already exists", on tente un checkout simple avant d'abandonner
             if (createBranch.stderr?.includes('already exists') || createBranch.stdout?.includes('already exists')) {
                 console.log(`[Git] Branche ${branchName} déjà existante localement, basculement...`);
-                const retryCheckout = await this.runCommand('git', ['checkout', branchName], localPath);
+                const retryCheckout = await this.runCommand('git', ['checkout', '-f', branchName], localPath);
                 if (retryCheckout.success) {
                     return { success: true, repoName, localPath };
                 }
