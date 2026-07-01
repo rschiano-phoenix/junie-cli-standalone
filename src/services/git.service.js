@@ -79,6 +79,20 @@ class GitService {
         return env;
     }
 
+    async commit(cwd, message) {
+        await this.runCommand('git', ['add', '.'], cwd);
+        return this.runCommand('git', ['commit', '-m', message], cwd);
+    }
+
+    async push(cwd, branchName) {
+        // Pas de force push (-f)
+        return this.runCommand('git', ['push', 'origin', branchName], cwd);
+    }
+
+    async checkout(cwd, branchName) {
+        return this.runCommand('git', ['checkout', branchName], cwd);
+    }
+
     async setupRepo(repoUrl, projectWorkspace, branchName) {
         const repoName = path.basename(repoUrl, '.git');
         const localPath = path.join(projectWorkspace, repoName);

@@ -84,7 +84,16 @@ class WebhookController {
 
             // Add plan comment
             const reposText = (project.repos || []).map(r => `- ${r}`).join('\n');
-            const planComment = `👷 **Début du développement**\n\nPlan de réalisation :\n1. Préparation de l'espace de travail.\n2. Création de la branche \`trello/${card.idShort}\`.\n3. Exécution de Junie sur :\n${reposText}\n4. Finalisation et rapport.`;
+            const planComment = `👋 Bonjour ! Je m'occupe de ce ticket.
+
+Voici mon plan d'action pour aujourd'hui :
+1. Préparer un espace de travail tout propre.
+2. Créer une branche dédiée \`trello/${card.idShort}\` sur chaque dépôt.
+3. Laisser Junie opérer sa magie sur :
+${reposText}
+4. Vous faire un rapport complet dès que j'ai fini.
+
+Je commence tout de suite ! 🚀`;
             await trelloService.addComment(cardId, planComment, credentials);
 
             const branchName = `trello/${card.idShort}`;
@@ -105,17 +114,42 @@ class WebhookController {
             }
 
             const projectWorkspace = gitService.cleanProjectWorkspace(projectKey);
+            await trelloService.addComment(cardId, `📁 L'espace de travail est prêt, je commence le traitement des dépôts.`, credentials);
+            
             const results = [];
 
             for (const repoUrl of (project.repos || [])) {
                 const setup = await gitService.setupRepo(repoUrl, projectWorkspace, branchName);
                 
                 if (!setup.success) {
-                    results.push({ code: 1, repo: setup.repoName, error: setup.error, cost: 'N/A', tokens: 'N/A' });
+                    results.push({ code: 1, repo: setup.repoName, error: setup.error, cost: '0.00$', tokens: '0' });
                     continue;
                 }
 
+                await trelloService.addComment(cardId, `🔍 J'analyse et je modifie le code sur le dépôt **${setup.repoName}**...`, credentials);
+
                 const result = await junieService.run(setup.localPath, card, apiKey);
+                
+                if (result.code === 0) {
+                    await trelloService.addComment(cardId, `🛠️ Junie a terminé ses modifications sur **${setup.repoName}**. Je synchronise tout ça...`, credentials);
+                    
+                    // Commit & Push
+                    const commitMsg = `Junie: ${card.name} (Trello #${card.idShort})`;
+                    const committed = await gitService.commit(setup.localPath, commitMsg);
+                    
+                    if (committed) {
+                        const pushed = await gitService.push(setup.localPath, branchName);
+                        if (pushed) {
+                            await trelloService.addComment(cardId, `📤 Les modifications ont été poussées sur la branche \`${branchName}\` de **${setup.repoName}**.`, credentials);
+                        } else {
+                            await trelloService.addComment(cardId, `⚠️ Petit souci lors du push sur **${setup.repoName}**, mais les changements sont commités localement.`, credentials);
+                        }
+                    }
+
+                    // Retour sur develop
+                    await gitService.checkout(setup.localPath, 'develop');
+                }
+
                 results.push(result);
             }
 
@@ -130,11 +164,28 @@ class WebhookController {
 
     async finalizeTrelloCard(cardId, project, results, credentials) {
         const allSuccess = results.length > 0 && results.every(r => r.code === 0);
+        
+        // Calcul de la consommation totale
+        let totalCost = 0;
+        let totalTokens = 0;
+        
+        results.forEach(r => {
+            if (r.cost && typeof r.cost === 'string') {
+                const val = parseFloat(r.cost.replace(/[^\d.]/g, ''));
+                if (!isNaN(val)) totalCost += val;
+            }
+            if (r.tokens) {
+                const val = parseInt(r.tokens.toString().replace(/[^\d]/g, ''), 10);
+                if (!isNaN(val)) totalTokens += val;
+            }
+        });
+
         const summary = results.map(r => 
-            `- Repo ${r.repo}: ${r.code === 0 ? '✅' : '❌ (' + (r.error || 'Code ' + r.code) + ')'} | Cost: ${r.cost} | Tokens: ${r.tokens}`
+            `- **${r.repo}** : ${r.code === 0 ? '✅ Réussi' : '❌ Échoué (' + (r.error || 'Erreur ' + r.code) + ')'} (Coût : ${r.cost}, Tokens : ${r.tokens})`
         ).join('\n');
 
-        const finalComment = `Résumé de l'exécution Junie :\n${summary}`;
+        const consumptionSummary = `💰 **Consommation totale** : $${totalCost.toFixed(2)} | 🪙 **Tokens** : ${totalTokens.toLocaleString()}`;
+        const finalComment = `J'ai terminé mon travail ! Voici un petit résumé de ce qui a été fait :\n\n${summary}\n\n${consumptionSummary}`;
 
         let destinationListId = null;
         if (allSuccess) {
@@ -151,14 +202,14 @@ class WebhookController {
             }
         }
 
-        const statusEmoji = allSuccess ? '✅' : '❌';
-        const statusText = allSuccess ? 'terminée avec succès' : 'bloquée par une erreur';
+        const statusEmoji = allSuccess ? '🎉' : '😕';
+        const statusText = allSuccess ? 'est terminée avec succès' : 'a rencontré quelques obstacles';
 
         if (destinationListId) {
             await trelloService.moveCard(cardId, destinationListId, credentials);
-            await trelloService.addComment(cardId, `${statusEmoji} Tâche ${statusText} !\n\n${finalComment}`, credentials);
+            await trelloService.addComment(cardId, `${statusEmoji} La tâche ${statusText} !\n\n${finalComment}`, credentials);
         } else {
-            await trelloService.addComment(cardId, `${statusEmoji} Tâche ${statusText} !\n\n${finalComment}\n\nNote: Aucune liste de destination configurée.`, credentials);
+            await trelloService.addComment(cardId, `${statusEmoji} La tâche ${statusText} !\n\n${finalComment}\n\n*Note : Je n'ai pas trouvé de liste de destination où ranger la carte.*`, credentials);
         }
     }
 }

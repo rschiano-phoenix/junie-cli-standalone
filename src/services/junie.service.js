@@ -30,13 +30,17 @@ class JunieService {
             junie.stderr.on('data', d => { output += d; console.error(`[Junie Error] ${d.toString().trim()}`); });
 
             junie.on('close', (code) => {
-                const costMatch = output.match(/Total cost: (\$[\d.]+)/i);
-                const tokensMatch = output.match(/Total tokens: ([\d,]+)/i);
+                // Regex plus flexibles pour capturer les coûts et tokens
+                // Junie peut afficher : "Total cost: $0.12" ou "Total tokens: 1,234"
+                const costMatch = output.match(/Total cost[:\s]+(\$[\d.,]+)/i);
+                const tokensMatch = output.match(/Total tokens[:\s]+([\d.,]+)/i);
+                
                 resolve({
                     code,
-                    cost: costMatch?.[1] || 'N/A',
-                    tokens: tokensMatch?.[1] || 'N/A',
-                    repo: path.basename(repoPath)
+                    cost: costMatch ? costMatch[1] : '0.00$',
+                    tokens: tokensMatch ? tokensMatch[1].replace(/,/g, '') : '0',
+                    repo: path.basename(repoPath),
+                    output: output // Optionnel : garder l'output pour debug
                 });
             });
         });
