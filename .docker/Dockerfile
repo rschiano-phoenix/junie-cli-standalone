@@ -1,9 +1,10 @@
 FROM node:20-slim
 
-# Install dependencies: curl for Junie, git for repo operations, docker.io for exec, ca-certificates for git, unzip for installation
+# Install dependencies: curl for Junie, git for repo operations, docker.io for exec, ca-certificates for git, unzip for installation, openssh-client for SSH repositories
 RUN apt-get update && apt-get install -y \
     curl \
     git \
+    openssh-client \
     docker.io \
     ca-certificates \
     unzip \
@@ -15,6 +16,9 @@ RUN curl -fsSL https://junie.jetbrains.com/install.sh | bash
 # Ensure Junie is in PATH
 # The install script typically puts it in /root/.local/bin or /usr/local/bin
 ENV PATH="/root/.local/bin:/usr/local/bin:${PATH}"
+
+# Prepare SSH directory for known_hosts/config when SSH repositories are used.
+RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh
 
 # Configure git to trust the app directory (useful for mounted volumes)
 RUN git config --global --add safe.directory /app

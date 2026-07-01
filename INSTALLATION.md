@@ -6,6 +6,7 @@ Ce guide explique comment installer et configurer le bridge entre Trello et Juni
 
 - **Docker** et **Docker Compose** (recommandé)
 - OU **Node.js 20+** et **Git** installés sur le serveur.
+- Un accès Git valide aux dépôts configurés. Pour les URLs SSH (`git@...`), utilisez une clef SSH chargée dans `ssh-agent` si elle est protégée par mot de passe.
 - Une **Clef API Junie** (récupérable sur [junie.jetbrains.com/cli](https://junie.jetbrains.com/cli)).
 - Des identifiants **Trello** (API Key, Secret) - *Voir section dédiée ci-dessous*.
 
@@ -78,6 +79,22 @@ C'est la méthode la plus simple car elle inclut toutes les dépendances (Junie 
    > **Note sur `TRELLO_CALLBACK_URL`** : Ce n'est pas une valeur fournie par Trello, mais l'URL **publique** de votre serveur bridge. Elle doit impérativement se terminer par `/webhook` (ex: `https://mon-domaine.com/webhook`). Si vous testez localement, utilisez **ngrok** pour obtenir une URL publique.
    Vous pouvez également activer le mode simulation en ajoutant `DRY_RUN=true`.
 
+   Si vos dépôts Git sont en SSH avec une clef protégée par mot de passe, ne mettez pas le mot de passe dans la configuration. Chargez plutôt la clef dans l'agent SSH de la machine hôte :
+   ```bash
+   eval "$(ssh-agent -s)"
+   ssh-add ~/.ssh/id_ed25519
+   ```
+
+   Puis exposez l'agent au conteneur via le montage `SSH_AUTH_SOCK` déjà configuré dans `.docker/docker-compose.yml` :
+   ```yaml
+   - ${SSH_AUTH_SOCK}:${SSH_AUTH_SOCK}
+   ```
+
+   La variable `SSH_AUTH_SOCK` est déjà transmise au conteneur. Vous pouvez aussi définir `GIT_SSH_COMMAND` dans `.env` pour forcer une configuration SSH particulière, par exemple :
+   ```env
+   GIT_SSH_COMMAND=ssh -o StrictHostKeyChecking=accept-new
+   ```
+
 3. **Lancer le service** :
    ```bash
    docker compose -f .docker/docker-compose.yml up -d --build
@@ -97,8 +114,12 @@ Si vous préférez ne pas utiliser Docker :
    ```
 2. **Installer Junie CLI** :
    Suivez les instructions sur le site officiel de Junie.
-3. **Configurer le fichier .env** à la racine.
-4. **Configurer Systemd** :
+3. **Configurer Git SSH si nécessaire** :
+   - Ajoutez votre clef à `ssh-agent` avec `ssh-add ~/.ssh/id_ed25519`.
+   - Vérifiez que le même utilisateur que le service peut accéder à l'agent SSH.
+   - Si besoin, configurez `GIT_SSH_COMMAND` dans `.env`.
+4. **Configurer le fichier .env** à la racine.
+5. **Configurer Systemd** :
    - Adaptez le fichier `trello-junie.service` (chemins, utilisateur).
    - Copiez-le dans `/etc/systemd/system/`.
    - Activez-le :
@@ -132,7 +153,8 @@ Exemple `projects/mon-projet.json` :
 
 La configuration Trello est volontairement séparée :
 - **Global (`.env`)** : `TRELLO_KEY`, `TRELLO_SECRET`, `TRELLO_CALLBACK_URL` et le token sauvegardé automatiquement dans `.trello_token`, car ils décrivent l'intégration Trello et le serveur.
-- **Projet (`projects/*.json`)** : `boardId`, `targetListName`, `doneListName`, `failListName`, `repos`, et éventuellement `junieApiKey` si un projet doit utiliser une clé Junie différente. 
+- **Global Git (`.env`)** : `SSH_AUTH_SOCK`, `GIT_SSH_COMMAND` et `GIT_COMMAND_TIMEOUT_MS`, car ils décrivent la manière dont le serveur exécute `git`.
+- **Projet (`projects/*.json`)** : `boardId`, `targetListName`, `doneListName`, `failListName`, `repos`, et éventuellement `junieApiKey` si un projet doit utiliser une clé Junie différente.
 
 > **Note sur les IDs** : Vous pouvez toujours utiliser `targetListId`, `doneListId` et `failListId` si vous préférez figer la configuration sur des IDs techniques.
 

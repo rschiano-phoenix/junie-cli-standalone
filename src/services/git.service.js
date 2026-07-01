@@ -35,14 +35,42 @@ class GitService {
                 console.log(`[Git] [DRY RUN] Executing: ${command} ${args.join(' ')} in ${cwd || 'root'}`);
                 return true;
             }
+            const env = this.buildGitEnvironment();
             console.log(`[Git] Executing: ${command} ${args.join(' ')} in ${cwd || 'root'}`);
-            const result = spawnSync(command, args, { cwd, stdio: 'inherit' });
+            const result = spawnSync(command, args, {
+                cwd,
+                env,
+                stdio: 'inherit',
+                timeout: config.GIT.COMMAND_TIMEOUT_MS,
+            });
             if (result.error) throw result.error;
             return result.status === 0;
         } catch (e) {
             console.error(`[Git Error] ${e.message}`);
+            if (e.code === 'ETIMEDOUT') {
+                console.error('[Git Error] Command timed out. If your SSH key has a passphrase, make sure it is loaded in ssh-agent before starting the bridge.');
+            }
             return false;
         }
+    }
+
+    buildGitEnvironment() {
+        const env = {
+            ...process.env,
+            GIT_TERMINAL_PROMPT: '0',
+        };
+
+        if (config.GIT.SSH_COMMAND) {
+            env.GIT_SSH_COMMAND = config.GIT.SSH_COMMAND;
+            console.log('[Git] Using custom GIT_SSH_COMMAND.');
+        }
+
+        if (config.GIT.SSH_AUTH_SOCK) {
+            env.SSH_AUTH_SOCK = config.GIT.SSH_AUTH_SOCK;
+            console.log(`[Git] Using ssh-agent socket: ${config.GIT.SSH_AUTH_SOCK}`);
+        }
+
+        return env;
     }
 
     async setupRepo(repoUrl, projectWorkspace, branchName) {

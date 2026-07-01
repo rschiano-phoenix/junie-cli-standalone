@@ -9,6 +9,6 @@
   },
   "repos": [
     "git@github.com:phoenix-fr/glices-api.git",
-    "git@github.com:phoenix-fr/glices-bo.git"
+    "git@github.com:phoenix-fr/glices-backoffice.git"
   ]
 }

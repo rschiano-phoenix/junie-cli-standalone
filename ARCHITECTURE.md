@@ -27,7 +27,7 @@ Les services encapsulent la logique métier pour chaque intégration externe :
 
 - **`project.service.js`** : Charge et gère les fichiers de configuration situés dans le dossier `projects/`. Il permet de retrouver quel projet est concerné par un webhook Trello.
 - **`trello.service.js`** : Gère toute la communication avec l'API Trello (récupérer une carte, la déplacer, ajouter un commentaire) et la vérification de la signature HMAC pour la sécurité.
-- **`git.service.js`** : Responsable des opérations Git. Il nettoie le workspace, clone les dépôts, se place sur la branche `develop` et crée une branche spécifique pour le ticket Trello.
+- **`git.service.js`** : Responsable des opérations Git. Il nettoie le workspace, clone les dépôts, se place sur la branche `develop` et crée une branche spécifique pour le ticket Trello. Les commandes restent des commandes `git` standards et peuvent utiliser SSH via `ssh-agent`, `SSH_AUTH_SOCK` et `GIT_SSH_COMMAND`.
 - **`junie.service.js`** : Orchestre l'exécution de Junie CLI via des sous-processus. Il capture la sortie pour extraire les métriques de consommation (coût, tokens).
 
 ### Mode Dry Run
@@ -44,7 +44,7 @@ Les contrôleurs orchestrent les services pour répondre aux requêtes entrantes
 Centralise toutes les variables d'environnement (`.env`), charge le token Trello persistant (`.trello_token`) et définit les chemins absolus pour éviter les erreurs de contexte lors de l'exécution (notamment sous Docker).
 
 La règle de placement est la suivante :
-- **Configuration globale** : clés d'intégration et paramètres du serveur (`TRELLO_KEY`, `TRELLO_SECRET`, `TRELLO_CALLBACK_URL`, `JUNIE_API_KEY`, `PORT`, `DRY_RUN`).
+- **Configuration globale** : clés d'intégration et paramètres du serveur (`TRELLO_KEY`, `TRELLO_SECRET`, `TRELLO_CALLBACK_URL`, `JUNIE_API_KEY`, `PORT`, `DRY_RUN`, `SSH_AUTH_SOCK`, `GIT_SSH_COMMAND`, `GIT_COMMAND_TIMEOUT_MS`).
 - **Configuration projet** : listes Trello à surveiller/destination, dépôts Git et éventuelle surcharge `junieApiKey`.
 - **Compatibilité avancée** : les champs Trello `key`, `secret` et `callbackUrl` restent supportés au niveau projet pour gérer plusieurs Power-Ups, mais ils ne sont pas nécessaires dans le cas standard.
 

@@ -9,12 +9,20 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ..:/app # Mount project root to /app so Junie can access the codebase
       - /app/node_modules # Ensure node_modules from the image are used even with the mount
+      # To use an SSH key protected by a passphrase, load it in ssh-agent on the host,
+      # then uncomment the next line and export SSH_AUTH_SOCK before running docker compose.
+      - ${SSH_AUTH_SOCK}:${SSH_AUTH_SOCK}
+      # Optional: mount known_hosts and SSH config if needed.
+      - ~/.ssh:/root/.ssh:ro
     environment:
       - TRELLO_KEY=${TRELLO_KEY}
       - TRELLO_SECRET=${TRELLO_SECRET}
       - TRELLO_CALLBACK_URL=${TRELLO_CALLBACK_URL}
       - JUNIE_API_KEY=${JUNIE_API_KEY}
+      - GIT_SSH_COMMAND=${GIT_SSH_COMMAND}
+      - SSH_AUTH_SOCK=${SSH_AUTH_SOCK}
+      - GIT_COMMAND_TIMEOUT_MS=${GIT_COMMAND_TIMEOUT_MS:-120000}
       - PORT=${PORT:-3000}
-      - DRY_RUN=${DRY_RUN:-true}
+      - DRY_RUN=${DRY_RUN:-false}
     ports:
       - "3000:3000"

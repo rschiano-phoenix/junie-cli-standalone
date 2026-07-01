@@ -24,6 +24,11 @@ const config = {
     JUNIE: {
         API_KEY: readEnv('JUNIE_API_KEY'),
     },
+    GIT: {
+        SSH_COMMAND: readEnv('GIT_SSH_COMMAND'),
+        SSH_AUTH_SOCK: readEnv('SSH_AUTH_SOCK'),
+        COMMAND_TIMEOUT_MS: Number(readEnv('GIT_COMMAND_TIMEOUT_MS', 120000)),
+    },
     DRY_RUN: process.env.DRY_RUN === 'true',
     PORT: readEnv('PORT', 3000),
     PATHS: {
