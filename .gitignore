@@ -10,10 +10,12 @@ yarn-error.log*
 
 # Runtime data
 workspace/
+.trello_token
 
 # Environment variables
 .env
 .env.local
+.docker/.env
 
 # IDEs
 .idea/

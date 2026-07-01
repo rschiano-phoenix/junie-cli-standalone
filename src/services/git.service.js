@@ -1,4 +1,4 @@
-const { execSync } = require('child_process');
+const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const config = require('../config/config');
@@ -29,15 +29,16 @@ class GitService {
         return projectPath;
     }
 
-    async runCommand(command, cwd) {
+    async runCommand(command, args = [], cwd) {
         try {
             if (config.DRY_RUN) {
-                console.log(`[Git] [DRY RUN] Executing: ${command} in ${cwd || 'root'}`);
+                console.log(`[Git] [DRY RUN] Executing: ${command} ${args.join(' ')} in ${cwd || 'root'}`);
                 return true;
             }
-            console.log(`[Git] Executing: ${command} in ${cwd || 'root'}`);
-            execSync(command, { cwd, stdio: 'inherit' });
-            return true;
+            console.log(`[Git] Executing: ${command} ${args.join(' ')} in ${cwd || 'root'}`);
+            const result = spawnSync(command, args, { cwd, stdio: 'inherit' });
+            if (result.error) throw result.error;
+            return result.status === 0;
         } catch (e) {
             console.error(`[Git Error] ${e.message}`);
             return false;
@@ -49,17 +50,17 @@ class GitService {
         const localPath = path.join(projectWorkspace, repoName);
 
         // Clone
-        if (!await this.runCommand(`git clone ${repoUrl} ${localPath}`)) {
+        if (!await this.runCommand('git', ['clone', repoUrl, localPath])) {
             return { success: false, repoName, error: 'Clone failed' };
         }
 
         // Checkout develop
-        if (!await this.runCommand(`git checkout develop`, localPath)) {
+        if (!await this.runCommand('git', ['checkout', 'develop'], localPath)) {
             return { success: false, repoName, error: 'Checkout develop failed' };
         }
 
         // Create and checkout branch
-        if (!await this.runCommand(`git checkout -b ${branchName}`, localPath)) {
+        if (!await this.runCommand('git', ['checkout', '-b', branchName], localPath)) {
             return { success: false, repoName, error: `Failed to create branch ${branchName}` };
         }
 

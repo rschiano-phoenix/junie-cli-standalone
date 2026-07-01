@@ -34,16 +34,19 @@ Les services encapsulent la logique métier pour chaque intégration externe :
 
 Si la variable d'environnement `DRY_RUN` est définie à `true`, le bridge simulera les opérations Git, Junie et Trello (déplacement de cartes, ajout de commentaires) sans les exécuter réellement. Les commandes et actions prévues seront affichées dans les logs du serveur. C'est idéal pour tester la configuration sans modifier vos dépôts ou vos tableaux Trello.
 
-### 3. Contrôleur (`src/controllers/webhook.controller.js`)
-C'est le "cerveau" du projet. Il reçoit les webhooks Trello et coordonne les services :
-1. Valide la signature de la requête.
-2. Vérifie si le projet n'est pas déjà en cours de traitement (système de verrouillage).
-3. Prépare les dépôts Git via le `GitService`.
-4. Lance Junie sur chaque dépôt via le `JunieService`.
-5. Poste le résumé consolidé sur Trello et déplace la carte via le `TrelloService`.
+### 3. Contrôleurs (`src/controllers/`)
+Les contrôleurs orchestrent les services pour répondre aux requêtes entrantes :
+
+- **`webhook.controller.js`** : Reçoit les webhooks Trello. Il valide la signature, prépare le code source via `GitService`, lance Junie via `JunieService` et met à jour Trello via `TrelloService`.
+- **`auth.controller.js`** : Gère le flux d'authentification Trello. Il fournit une interface simple pour générer le `TRELLO_TOKEN` nécessaire à l'application.
 
 ### 4. Configuration (`src/config/config.js`)
-Centralise toutes les variables d'environnement (`.env`) et définit les chemins absolus pour le projet afin d'éviter les erreurs de contexte lors de l'exécution (notamment sous Docker).
+Centralise toutes les variables d'environnement (`.env`), charge le token Trello persistant (`.trello_token`) et définit les chemins absolus pour éviter les erreurs de contexte lors de l'exécution (notamment sous Docker).
+
+La règle de placement est la suivante :
+- **Configuration globale** : clés d'intégration et paramètres du serveur (`TRELLO_KEY`, `TRELLO_SECRET`, `TRELLO_CALLBACK_URL`, `JUNIE_API_KEY`, `PORT`, `DRY_RUN`).
+- **Configuration projet** : listes Trello à surveiller/destination, dépôts Git et éventuelle surcharge `junieApiKey`.
+- **Compatibilité avancée** : les champs Trello `key`, `secret` et `callbackUrl` restent supportés au niveau projet pour gérer plusieurs Power-Ups, mais ils ne sont pas nécessaires dans le cas standard.
 
 ### 5. Dossier `projects/`
 Contient les définitions des projets. Le bridge est multi-projets : chaque fichier `.json` définit un mapping entre une liste Trello et un ou plusieurs dépôts Git.

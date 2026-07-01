@@ -38,6 +38,28 @@ class TrelloService {
         const { key, token } = credentials;
         return axios.post(`https://api.trello.com/1/cards/${cardId}/actions/comments?key=${key}&token=${token}`, { text });
     }
+
+    getAuthUrl() {
+        const key = config.TRELLO.KEY;
+        if (!key) return null;
+
+        const callbackUrl = config.TRELLO.CALLBACK_URL;
+        const name = "Trello-Junie Bridge";
+        const scope = "read,write,account";
+        const expiration = "never";
+        const responseType = "token";
+
+        let url = `https://trello.com/1/authorize?key=${key}&name=${encodeURIComponent(name)}&scope=${scope}&expiration=${expiration}&response_type=${responseType}`;
+
+        if (callbackUrl) {
+            // Trello supporte return_url pour rediriger après autorisation
+            // On pointe vers notre endpoint de callback
+            const returnUrl = callbackUrl.replace('/webhook', '/auth/trello/callback');
+            url += `&return_url=${encodeURIComponent(returnUrl)}`;
+        }
+
+        return url;
+    }
 }
 
 module.exports = new TrelloService();

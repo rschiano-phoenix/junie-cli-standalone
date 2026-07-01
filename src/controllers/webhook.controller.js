@@ -41,12 +41,17 @@ class WebhookController {
             return res.sendStatus(200);
         }
 
-        const credentials = {
-            key: project.trello?.key || config.TRELLO.KEY,
-            token: project.trello?.token || config.TRELLO.TOKEN,
-            secret: project.trello?.secret || config.TRELLO.SECRET,
-            callbackUrl: project.trello?.callbackUrl || config.TRELLO.CALLBACK_URL
-        };
+        const credentials = config.getTrelloCredentials(project);
+
+        if (!credentials.key || !credentials.secret || !credentials.callbackUrl) {
+            console.error(`[Webhook] Missing Trello configuration for project: ${projectKey}. Required: key, secret, callbackUrl.`);
+            return res.status(500).send('Trello configuration missing. Please check global .env or project configuration.');
+        }
+
+        if (!credentials.token) {
+            console.error(`[Webhook] No Trello token found for project: ${projectKey}. Please run /auth/trello.`);
+            return res.status(401).send('Trello token missing. Please authorize the bridge at /auth/trello');
+        }
 
         if (!trelloService.verifyWebhook(req, credentials.secret, credentials.callbackUrl)) {
             console.error(`[Webhook] Invalid signature for project: ${projectKey}`);
@@ -59,9 +64,21 @@ class WebhookController {
         try {
             const card = await trelloService.getCard(cardId, credentials);
             const branchName = `trello/${card.idShort}`;
-            const apiKey = project.junieApiKey || config.JUNIE.API_KEY;
+            const apiKey = config.getJunieApiKey(project);
+
+            if (!apiKey) {
+                console.error(`[Webhook] Missing Junie API key for project: ${projectKey}.`);
+                await trelloService.addComment(cardId, '❌ Junie API key is missing. Configure `JUNIE_API_KEY` globally or `junieApiKey` on the project.', credentials);
+                return;
+            }
 
             console.log(`[Webhook] Processing card: ${card.name} for ${projectKey}`);
+
+            if (!Array.isArray(project.repos) || project.repos.length === 0) {
+                console.error(`[Webhook] No repository configured for project: ${projectKey}.`);
+                await trelloService.addComment(cardId, '❌ No repository configured for this project. Add at least one repository in `repos`.', credentials);
+                return;
+            }
 
             const projectWorkspace = gitService.cleanProjectWorkspace(projectKey);
             const results = [];
@@ -95,9 +112,11 @@ class WebhookController {
 
         const finalComment = `Junie execution summary:\n${summary}`;
 
-        if (allSuccess) {
+        if (allSuccess && project.trello.doneListId) {
             await trelloService.moveCard(cardId, project.trello.doneListId, credentials);
             await trelloService.addComment(cardId, `✅ Task completed successfully!\n${finalComment}`, credentials);
+        } else if (allSuccess) {
+            await trelloService.addComment(cardId, `✅ Task completed successfully!\n${finalComment}\n\nNo done list configured, card was not moved.`, credentials);
         } else {
             await trelloService.addComment(cardId, `❌ Junie failed on some repositories.\n${finalComment}`, credentials);
         }

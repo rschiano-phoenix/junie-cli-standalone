@@ -10,8 +10,11 @@ services:
       - ..:/app # Mount project root to /app so Junie can access the codebase
       - /app/node_modules # Ensure node_modules from the image are used even with the mount
     environment:
+      - TRELLO_KEY=${TRELLO_KEY}
+      - TRELLO_SECRET=${TRELLO_SECRET}
       - TRELLO_CALLBACK_URL=${TRELLO_CALLBACK_URL}
       - JUNIE_API_KEY=${JUNIE_API_KEY}
-      - PORT=3000
+      - PORT=${PORT:-3000}
+      - DRY_RUN=${DRY_RUN:-true}
     ports:
       - "3000:3000"

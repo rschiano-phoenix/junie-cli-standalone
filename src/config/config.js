@@ -1,20 +1,48 @@
 const path = require('path');
 require('dotenv').config();
 
-module.exports = {
+const fs = require('fs');
+
+const tokenPath = path.join(process.cwd(), '.trello_token');
+let trelloToken = process.env.TRELLO_TOKEN;
+
+if (!trelloToken && fs.existsSync(tokenPath)) {
+    trelloToken = fs.readFileSync(tokenPath, 'utf8').trim();
+}
+
+function readEnv(name, defaultValue = undefined) {
+    return process.env[name] || defaultValue;
+}
+
+const config = {
     TRELLO: {
-        KEY: process.env.TRELLO_KEY,
-        TOKEN: process.env.TRELLO_TOKEN,
-        SECRET: process.env.TRELLO_SECRET,
-        CALLBACK_URL: process.env.TRELLO_CALLBACK_URL,
+        KEY: readEnv('TRELLO_KEY'),
+        TOKEN: trelloToken,
+        SECRET: readEnv('TRELLO_SECRET'),
+        CALLBACK_URL: readEnv('TRELLO_CALLBACK_URL'),
     },
     JUNIE: {
-        API_KEY: process.env.JUNIE_API_KEY,
+        API_KEY: readEnv('JUNIE_API_KEY'),
     },
     DRY_RUN: process.env.DRY_RUN === 'true',
-    PORT: process.env.PORT || 3000,
+    PORT: readEnv('PORT', 3000),
     PATHS: {
         PROJECTS_DIR: path.join(process.cwd(), 'projects'),
         WORKSPACE_DIR: path.join(process.cwd(), 'workspace'),
     }
 };
+
+config.getTrelloCredentials = function getTrelloCredentials(project = {}) {
+    return {
+        key: project.trello?.key || config.TRELLO.KEY,
+        token: config.TRELLO.TOKEN,
+        secret: project.trello?.secret || config.TRELLO.SECRET,
+        callbackUrl: project.trello?.callbackUrl || config.TRELLO.CALLBACK_URL,
+    };
+};
+
+config.getJunieApiKey = function getJunieApiKey(project = {}) {
+    return project.junieApiKey || config.JUNIE.API_KEY;
+};
+
+module.exports = config;

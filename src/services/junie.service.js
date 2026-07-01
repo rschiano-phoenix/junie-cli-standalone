@@ -7,7 +7,8 @@ class JunieService {
         if (config.DRY_RUN) {
             const timestamp = new Date().toISOString();
             console.log(`[${timestamp}] [DRY RUN] Starting Junie in: ${repoPath}`);
-            console.log(`[Junie] [DRY RUN] Command: junie --auth ${apiKey.substring(0, 5)}... --brave "${card.desc || card.name}"`);
+            const maskedApiKey = apiKey ? `${apiKey.substring(0, 5)}...` : '<missing>';
+            console.log(`[Junie] [DRY RUN] Command: junie --auth ${maskedApiKey} --brave "${card.desc || card.name}"`);
             return {
                 code: 0,
                 cost: '$0.00 (Dry Run)',
