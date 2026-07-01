@@ -53,6 +53,7 @@ Trello a migré la gestion de ses clés API vers le portail des Power-Ups. Voici
 ## Workflow Automatisé
 
 Le bridge suit un workflow précis pour chaque ticket :
+0. **Préparation** : À l'initialisation du serveur, tous les projets configurés dans le dossier `projects/` sont clonés dans le dossier `workspace/` pour s'assurer que l'environnement est prêt.
 1. **Trigger** : Vous déplacez une carte dans la colonne **"A développer"**.
 2. **Initialisation** : Le bridge déplace la carte dans **"En cours"** et ajoute un commentaire avec le plan de réalisation (dépôts ciblés, branche).
 3. **Exécution** : Le bridge prépare le code (clone/branche) et lance Junie CLI.

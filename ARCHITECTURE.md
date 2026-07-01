@@ -49,16 +49,17 @@ La règle de placement est la suivante :
 - **Compatibilité avancée** : les champs Trello `key`, `secret` et `callbackUrl` restent supportés au niveau projet pour gérer plusieurs Power-Ups, mais ils ne sont pas nécessaires dans le cas standard.
 
 ### 5. Dossier `projects/`
-Contient les définitions des projets. Le bridge est multi-projets : chaque fichier `.json` définit un mapping entre une liste Trello et un ou plusieurs dépôts Git.
+Contient les définitions des projets. Le bridge est multi-projets : chaque fichier `.json` définit un mapping entre une liste Trello et un ou plusieurs dépôts Git. Au démarrage, le serveur parcourt tous ces fichiers pour initialiser les espaces de travail correspondants.
 
 ### 6. Dossier `workspace/`
-Utilisé comme zone de travail temporaire. À chaque nouveau ticket, le bridge supprime le contenu lié au projet et repart d'un clone propre pour éviter les conflits de fichiers.
+Utilisé comme zone de travail temporaire. Lors de l'initialisation du serveur, tous les dépôts des projets configurés sont clonés ici. À chaque nouveau ticket, le bridge nettoie le dossier spécifique du projet et repart d'un clone propre pour éviter les conflits de fichiers.
 
 ## Flux de Données
 
-1. **Trello** envoie un `POST /webhook`.
-2. **`app.js`** capture le corps brut pour la validation.
-3. **`WebhookController`** identifie le projet.
-4. **`GitService`** prépare le code source dans `workspace/`.
-5. **`JunieService`** traite la demande.
-6. **`TrelloService`** met à jour le ticket.
+1. **Initialisation** : Au lancement (`server.js`), le `ProjectService` appelle `GitService` pour cloner tous les dépôts définis dans `projects/` sur leur branche par défaut (`develop`).
+2. **Trello** envoie un `POST /webhook`.
+3. **`app.js`** capture le corps brut pour la validation.
+4. **`WebhookController`** identifie le projet.
+5. **`GitService`** prépare le code source dans `workspace/`.
+6. **`JunieService`** traite la demande.
+7. **`TrelloService`** met à jour le ticket.

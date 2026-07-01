@@ -34,6 +34,32 @@ class ProjectService {
         }
         return projects;
     }
+
+    async initializeProjects(gitService) {
+        console.log(`[${new Date().toISOString()}] Initialisation des espaces de travail des projets...`);
+        const projects = this.loadProjects();
+        
+        for (const project of projects) {
+            const projectKey = project.name || project.trello.boardId || 'unknown';
+            const projectWorkspace = gitService.cleanProjectWorkspace(projectKey);
+            
+            console.log(`[Init] Configuration du projet : ${projectKey}`);
+            
+            for (const repoUrl of (project.repos || [])) {
+                const repoName = path.basename(repoUrl, '.git');
+                const localPath = path.join(projectWorkspace, repoName);
+                
+                console.log(`[Init] Clonage de ${repoName}...`);
+                const cloned = await gitService.runCommand('git', ['clone', repoUrl, localPath]);
+                
+                if (cloned) {
+                    // On se place par défaut sur develop pour être prêt
+                    await gitService.runCommand('git', ['checkout', 'develop'], localPath);
+                }
+            }
+        }
+        console.log(`[${new Date().toISOString()}] Initialisation terminée.`);
+    }
 }
 
 module.exports = new ProjectService();
