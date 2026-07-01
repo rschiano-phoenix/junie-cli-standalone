@@ -16,17 +16,16 @@ class GitService {
         }
     }
 
-    cleanProjectWorkspace(projectName) {
+    getProjectWorkspace(projectName) {
         const projectPath = path.join(this.workspaceDir, sanitizeName(projectName));
         if (config.DRY_RUN) {
-            console.log(`[Git] [DRY RUN] Would clean workspace: ${projectPath}`);
+            console.log(`[Git] [DRY RUN] Would ensure workspace: ${projectPath}`);
             return projectPath;
         }
-        if (fs.existsSync(projectPath)) {
-            console.log(`[Git] Cleaning workspace: ${projectPath}`);
-            fs.rmSync(projectPath, { recursive: true, force: true });
+        if (!fs.existsSync(projectPath)) {
+            console.log(`[Git] Creating workspace: ${projectPath}`);
+            fs.mkdirSync(projectPath, { recursive: true });
         }
-        fs.mkdirSync(projectPath, { recursive: true });
         return projectPath;
     }
 
@@ -141,18 +140,31 @@ class GitService {
     async setupRepo(repoUrl, projectWorkspace, branchName, baseBranch = 'develop') {
         const repoName = path.basename(repoUrl, '.git');
         const localPath = path.join(projectWorkspace, repoName);
+        const gitDir = path.join(localPath, '.git');
 
-        // Clone
-        const clone = await this.runCommand('git', ['clone', repoUrl, localPath]);
-        if (!clone.success) {
-            return { success: false, repoName, error: `Clone failed: ${clone.stderr || clone.error}` };
+        // Clone or Fetch
+        if (fs.existsSync(gitDir)) {
+            console.log(`[Git] Dépôt déjà présent, récupération des mises à jour pour ${repoName}...`);
+            const fetch = await this.runCommand('git', ['fetch', 'origin'], localPath);
+            if (!fetch.success) {
+                return { success: false, repoName, error: `Fetch failed: ${fetch.stderr || fetch.error}` };
+            }
+        } else {
+            console.log(`[Git] Clonage de ${repoName}...`);
+            const clone = await this.runCommand('git', ['clone', repoUrl, localPath]);
+            if (!clone.success) {
+                return { success: false, repoName, error: `Clone failed: ${clone.stderr || clone.error}` };
+            }
         }
 
-        // Checkout base branch
+        // Checkout base branch and pull
         const checkoutBase = await this.runCommand('git', ['checkout', baseBranch], localPath);
         if (!checkoutBase.success) {
             return { success: false, repoName, error: `Checkout ${baseBranch} failed: ${checkoutBase.stderr || checkoutBase.error}` };
         }
+        
+        // Pull latest from base branch
+        await this.runCommand('git', ['pull', 'origin', baseBranch], localPath);
 
         // Try to checkout existing branch (local or remote)
         const checkoutBranch = await this.runCommand('git', ['checkout', branchName], localPath);

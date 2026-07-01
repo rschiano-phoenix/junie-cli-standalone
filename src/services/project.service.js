@@ -80,20 +80,14 @@ class ProjectService {
                 this.logWebhookCommand(project);
             }
 
-            const projectWorkspace = gitService.cleanProjectWorkspace(projectKey);
+            const projectWorkspace = gitService.getProjectWorkspace(projectKey);
             
             console.log(`[Init] Configuration du projet : ${projectKey}`);
             
             for (const repoUrl of (project.repos || [])) {
-                const repoName = path.basename(repoUrl, '.git');
-                const localPath = path.join(projectWorkspace, repoName);
-                
-                console.log(`[Init] Clonage de ${repoName}...`);
-                const cloned = await gitService.runCommand('git', ['clone', repoUrl, localPath]);
-                
-                if (cloned) {
-                    await gitService.runCommand('git', ['checkout', baseBranch], localPath);
-                }
+                // Pour l'initialisation, on se contente de préparer le repo sur la branche de base
+                // On utilise setupRepo avec branchName = baseBranch pour éviter de créer une branche trello/xxx inutile
+                await gitService.setupRepo(repoUrl, projectWorkspace, baseBranch, baseBranch);
             }
         }
         console.log(`[${new Date().toISOString()}] Initialisation terminée.`);

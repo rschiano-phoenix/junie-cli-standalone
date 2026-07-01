@@ -141,7 +141,7 @@ Je commence tout de suite ! 🚀`;
                 return;
             }
 
-            const projectWorkspace = gitService.cleanProjectWorkspace(projectKey);
+            const projectWorkspace = gitService.getProjectWorkspace(projectKey);
             
             const results = [];
 
