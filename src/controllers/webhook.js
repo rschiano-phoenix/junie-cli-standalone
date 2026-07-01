@@ -156,8 +156,11 @@ Je commence tout de suite ! 🚀`;
                 const result = await junieService.run(setup.localPath, instruction, apiKey);
                 
                 if (result.code === 0) {
-                    // Get diff stats before switching back
-                    result.diffStat = await gitService.getDiffStat(setup.localPath, branchName, baseBranch);
+                    // Indexation de tous les changements (y compris les nouveaux fichiers) pour un diff et commit précis
+                    await gitService.add(setup.localPath);
+
+                    // Récupération des statistiques du diff avant de revenir sur la branche de base
+                    result.diffStat = await gitService.getDiffStat(setup.localPath, baseBranch);
 
                     // Commit & Push
                     const commitMsg = `Junie: ${card.name} (Trello #${card.idShort})`;

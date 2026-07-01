@@ -91,8 +91,12 @@ class GitService {
         return env;
     }
 
+    async add(cwd) {
+        return this.runCommand('git', ['add', '-A'], cwd);
+    }
+
     async commit(cwd, message) {
-        if (!await this.runCommand('git', ['add', '.'], cwd)) return false;
+        if (!await this.add(cwd)) return false;
         return this.runCommand('git', ['commit', '-m', message], cwd);
     }
 
@@ -132,12 +136,12 @@ class GitService {
         return { success: true, repoName, localPath };
     }
 
-    async getDiffStat(cwd, branchName, baseBranch = 'develop') {
+    async getDiffStat(cwd, baseBranch = 'develop') {
         try {
             if (config.DRY_RUN) return "1 file changed, 10 insertions(+), 5 deletions(-)";
 
             const env = this.buildGitEnvironment();
-            const result = spawnSync('git', ['diff', '--stat', baseBranch, branchName], {
+            const result = spawnSync('git', ['diff', '--stat', baseBranch], {
                 cwd,
                 env,
                 encoding: 'utf8',
