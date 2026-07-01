@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const config = require('../config/config');
-const { maskSecret } = require('../utils/format');
+const { maskSecret, getCallbackUrl } = require('../utils/format');
 
 class ProjectService {
     constructor() {
@@ -42,7 +42,8 @@ class ProjectService {
         
         const key = creds.key ? maskSecret(creds.key) : '<VOTRE_TRELLO_KEY>';
         const token = creds.token ? maskSecret(creds.token) : '<VOTRE_TRELLO_TOKEN>';
-        const callbackUrl = creds.callbackUrl || '<VOTRE_TRELLO_CALLBACK_URL>';
+        const initialUrl = getCallbackUrl(creds.callbackUrl, 'initial');
+        const improveUrl = getCallbackUrl(creds.callbackUrl, 'improve');
 
         console.log(`[Dry Run] [Projet: ${project.name || 'Inconnu'}] Commandes pour créer les webhooks Trello :`);
         console.log('[Dry Run] Les secrets sont masqués dans les logs. Remplacez les valeurs TRELLO_KEY/TRELLO_TOKEN si vous copiez cette commande.');
@@ -52,12 +53,11 @@ class ProjectService {
   "https://api.trello.com/1/webhooks/?key=${key}&token=${token}" \\
   -d '{
     "description": "Junie Bridge Initial - ${project.name || 'Projet'}",
-    "callbackURL": "${callbackUrl}",
+    "callbackURL": "${initialUrl}",
     "idModel": "${idModel || '<ID_DU_TABLEAU_OU_DE_LA_LISTE>'}"
   }'`);
 
         console.log(`2. Webhook Amélioration (A reprendre) :`);
-        const improveUrl = callbackUrl.endsWith('/webhook') ? `${callbackUrl}/improve` : `${callbackUrl}/webhook/improve`;
         console.log(`curl -X POST -H "Content-Type: application/json" \\
   "https://api.trello.com/1/webhooks/?key=${key}&token=${token}" \\
   -d '{

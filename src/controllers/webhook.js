@@ -3,7 +3,7 @@ const projectService = require('../services/project.service');
 const trelloService = require('../services/trello.service');
 const gitService = require('../services/git.service');
 const junieService = require('../services/junie.service');
-const { parseCurrency, parseInteger } = require('../utils/format');
+const { parseCurrency, parseInteger, getCallbackUrl } = require('../utils/format');
 
 class WebhookController {
     constructor() {
@@ -66,8 +66,9 @@ class WebhookController {
         }
 
         const credentials = config.getTrelloCredentials(project);
+        const callbackUrl = getCallbackUrl(credentials.callbackUrl, type);
 
-        if (!credentials.key || !credentials.secret || !credentials.callbackUrl) {
+        if (!credentials.key || !credentials.secret || !callbackUrl) {
             console.error(`[Webhook] Missing Trello configuration for project: ${projectKey}. Required: key, secret, callbackUrl.`);
             return res.status(500).send('Trello configuration missing. Please check global .env or project configuration.');
         }
@@ -77,8 +78,9 @@ class WebhookController {
             return res.status(401).send('Trello token missing. Please authorize the bridge at /auth/trello');
         }
 
-        if (!trelloService.verifyWebhook(req, credentials.secret, credentials.callbackUrl)) {
-            console.error(`[Webhook] Invalid signature for project: ${projectKey}`);
+        if (!trelloService.verifyWebhook(req, credentials.secret, callbackUrl)) {
+            console.error(`[Webhook] Invalid signature for project: ${projectKey} (Type: ${type})`);
+            console.error(`[Webhook] Used callback URL for verification: ${callbackUrl}`);
             return res.status(403).send('Invalid signature');
         }
 

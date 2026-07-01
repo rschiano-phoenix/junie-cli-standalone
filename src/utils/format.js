@@ -26,9 +26,19 @@ function parseInteger(value) {
     return Number.parseInt(normalized, 10) || 0;
 }
 
+function getCallbackUrl(baseUrl, type = 'initial') {
+    if (!baseUrl) return '';
+    const cleanBase = baseUrl.replace(/\/$/, '');
+    if (type === 'improve') {
+        return cleanBase.endsWith('/webhook') ? `${cleanBase}/improve` : `${cleanBase}/webhook/improve`;
+    }
+    return cleanBase.endsWith('/webhook') ? cleanBase : `${cleanBase}/webhook`;
+}
+
 module.exports = {
     maskSecret,
     parseCurrency,
     parseInteger,
     sanitizeName,
+    getCallbackUrl
 };
