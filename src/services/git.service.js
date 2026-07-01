@@ -47,17 +47,33 @@ class GitService {
             const result = spawnSync(command, args, {
                 cwd,
                 env,
-                stdio: 'inherit',
+                stdio: 'pipe', // Changé de 'inherit' à 'pipe' pour capturer la sortie
+                encoding: 'utf8',
                 timeout: config.GIT.COMMAND_TIMEOUT_MS,
             });
             if (result.error) throw result.error;
-            return result.status === 0;
+
+            if (result.status !== 0) {
+                console.error(`[Git Error] Command failed with status ${result.status}`);
+                console.error(`[Git Error] stdout: ${result.stdout}`);
+                console.error(`[Git Error] stderr: ${result.stderr}`);
+            }
+
+            return {
+                success: result.status === 0,
+                status: result.status,
+                stdout: result.stdout,
+                stderr: result.stderr
+            };
         } catch (e) {
             console.error(`[Git Error] ${e.message}`);
             if (e.code === 'ETIMEDOUT') {
                 console.error('[Git Error] Command timed out. If your SSH key has a passphrase, make sure it is loaded in ssh-agent before starting the bridge.');
             }
-            return false;
+            return {
+                success: false,
+                error: e.message
+            };
         }
     }
 
@@ -92,21 +108,34 @@ class GitService {
     }
 
     async add(cwd) {
-        return this.runCommand('git', ['add', '-A'], cwd);
+        const result = await this.runCommand('git', ['add', '-A'], cwd);
+        return result.success;
     }
 
     async commit(cwd, message) {
         if (!await this.add(cwd)) return false;
-        return this.runCommand('git', ['commit', '-m', message], cwd);
+        const result = await this.runCommand('git', ['commit', '-m', message], cwd);
+        
+        // Si le commit échoue, on vérifie si c'est parce qu'il n'y a rien à committer
+        if (!result.success) {
+            if (result.stdout?.includes('nothing to commit') || result.stderr?.includes('nothing to commit')) {
+                console.log(`[Git] Nothing to commit in ${cwd}`);
+                return true; // On considère ça comme un succès fonctionnel
+            }
+            return false;
+        }
+        return true;
     }
 
     async push(cwd, branchName) {
         // On utilise -u pour lier la branche à l'origin
-        return this.runCommand('git', ['push', '-u', 'origin', branchName], cwd);
+        const result = await this.runCommand('git', ['push', '-u', 'origin', branchName], cwd);
+        return result.success;
     }
 
     async checkout(cwd, branchName) {
-        return this.runCommand('git', ['checkout', branchName], cwd);
+        const result = await this.runCommand('git', ['checkout', branchName], cwd);
+        return result.success;
     }
 
     async setupRepo(repoUrl, projectWorkspace, branchName, baseBranch = 'develop') {
@@ -114,22 +143,25 @@ class GitService {
         const localPath = path.join(projectWorkspace, repoName);
 
         // Clone
-        if (!await this.runCommand('git', ['clone', repoUrl, localPath])) {
-            return { success: false, repoName, error: 'Clone failed' };
+        const clone = await this.runCommand('git', ['clone', repoUrl, localPath]);
+        if (!clone.success) {
+            return { success: false, repoName, error: `Clone failed: ${clone.stderr || clone.error}` };
         }
 
         // Checkout base branch
-        if (!await this.runCommand('git', ['checkout', baseBranch], localPath)) {
-            return { success: false, repoName, error: `Checkout ${baseBranch} failed` };
+        const checkoutBase = await this.runCommand('git', ['checkout', baseBranch], localPath);
+        if (!checkoutBase.success) {
+            return { success: false, repoName, error: `Checkout ${baseBranch} failed: ${checkoutBase.stderr || checkoutBase.error}` };
         }
 
         // Try to checkout existing branch (local or remote)
-        const branchExists = await this.runCommand('git', ['checkout', branchName], localPath);
+        const checkoutBranch = await this.runCommand('git', ['checkout', branchName], localPath);
 
-        if (!branchExists) {
+        if (!checkoutBranch.success) {
             // Create and checkout branch if it doesn't exist
-            if (!await this.runCommand('git', ['checkout', '-b', branchName], localPath)) {
-                return { success: false, repoName, error: `Failed to create branch ${branchName}` };
+            const createBranch = await this.runCommand('git', ['checkout', '-b', branchName], localPath);
+            if (!createBranch.success) {
+                return { success: false, repoName, error: `Failed to create branch ${branchName}: ${createBranch.stderr || createBranch.error}` };
             }
             // Pousser la branche immédiatement sur le dépôt distant
             await this.push(localPath, branchName);

@@ -165,7 +165,9 @@ Je commence tout de suite ! 🚀`;
                         result.diffStat = await gitService.getDiffStat(setup.localPath, baseBranch);
                         
                         // Push des changements sur la branche distante
-                        if (!await gitService.push(setup.localPath, branchName)) {
+                        if (await gitService.push(setup.localPath, branchName)) {
+                            result.code = 0; // Succès réel
+                        } else {
                             result.code = 1;
                             result.error = 'Push Git impossible';
                         }

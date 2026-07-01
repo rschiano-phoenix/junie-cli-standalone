@@ -49,6 +49,7 @@ class JunieService {
             });
 
             junie.on('close', (code) => {
+                console.log(`[Junie] Process exited with code ${code}`);
                 // Regex plus flexibles pour capturer les coûts et tokens
                 // Junie peut afficher : "Total cost: $0.12" ou "Total tokens: 1,234"
                 const costMatch = output.match(/Total cost[:\s]+(\$[\d.,]+)/i);
