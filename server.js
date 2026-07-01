@@ -6,6 +6,17 @@ const gitService = require('./src/services/git.service');
 const PORT = config.PORT;
 
 async function bootstrap() {
+    console.log(`[${new Date().toISOString()}] Starting Trello-Junie Bridge...`);
+    
+    // SSH Auth Diagnosis
+    if (config.GIT.SSH_AUTH_SOCK) {
+        console.log(`[Init] SSH Agent socket detected: ${config.GIT.SSH_AUTH_SOCK}`);
+    } else if (config.GIT.SSH_COMMAND && config.GIT.SSH_COMMAND.includes('-i')) {
+        console.log(`[Init] SSH using explicit key via GIT_SSH_COMMAND.`);
+    } else {
+        console.log(`[Init] No SSH agent or explicit key detected. SSH clones may require no passphrase or will fail.`);
+    }
+
     try {
         await projectService.initializeProjects(gitService);
     } catch (err) {

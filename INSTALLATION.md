@@ -104,6 +104,32 @@ Le bridge est maintenant accessible sur le port `3000`.
 
 ---
 
+## Résolution des problèmes SSH (SSH_AUTH_SOCK)
+
+Si vous utilisez des dépôts Git privés via SSH et que vous rencontrez l'erreur `SSH_AUTH_SOCK is not set` ou `Permission denied (publickey)`, voici comment corriger la situation :
+
+### 1. Utilisation correcte de l'agent SSH
+La commande `ssh-agent -s` affiche des commandes mais ne les exécute pas dans votre shell actuel. Vous devez l'évaluer pour que les variables soient exportées :
+```bash
+eval $(ssh-agent -s)
+ssh-add ~/.ssh/id_ed25519  # Remplacez par le chemin vers votre clé privée
+```
+
+### 2. Cas de l'utilisation avec `sudo`
+Si vous devez utiliser `sudo docker compose`, vos variables d'environnement (dont `SSH_AUTH_SOCK`) sont souvent supprimées par sécurité par `sudo`. Pour corriger cela :
+- **Utilisez l'option -E** : `sudo -E docker compose -f .docker/docker-compose.yml up -d` (conserve l'environnement actuel).
+- **Passez la variable explicitement** : `sudo SSH_AUTH_SOCK=$SSH_AUTH_SOCK docker compose -f .docker/docker-compose.yml up -d`.
+- **(Recommandé)** : Ajoutez votre utilisateur au groupe `docker` pour ne plus avoir besoin de `sudo` : `sudo usermod -aG docker $USER` (nécessite une déconnexion/reconnexion).
+
+### 3. Vérification de la transmission
+Vous pouvez vérifier si la socket est bien accessible à l'intérieur du conteneur en cours d'exécution :
+```bash
+docker compose -f .docker/docker-compose.yml exec trello-bridge ls -la $SSH_AUTH_SOCK
+```
+Si la commande échoue, vérifiez que le montage de volume est actif dans `docker-compose.yml`.
+
+---
+
 ## Méthode 2 : Installation Manuelle (Systemd)
 
 Si vous préférez ne pas utiliser Docker :
@@ -162,7 +188,9 @@ La configuration Trello est volontairement séparée :
 
 ## Création du Webhook Trello
 
-Pour que Trello envoie les événements au bridge, vous devez créer un webhook manuellement (une seule fois par projet) :
+Pour que Trello envoie les événements au bridge, vous devez créer un webhook manuellement (une seule fois par projet).
+
+> **Astuce** : Si vous lancez le bridge avec `DRY_RUN=true`, il affichera automatiquement dans les logs la commande `curl` exacte à exécuter pour chacun de vos projets configurés.
 
 ```bash
 curl -X POST -H "Content-Type: application/json" \

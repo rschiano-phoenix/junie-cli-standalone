@@ -35,6 +35,12 @@ class GitService {
                 console.log(`[Git] [DRY RUN] Executing: ${command} ${args.join(' ')} in ${cwd || 'root'}`);
                 return true;
             }
+
+            const isSsh = args.some(arg => typeof arg === 'string' && (arg.includes('git@') || arg.includes('ssh://')));
+            if (isSsh && !config.GIT.SSH_AUTH_SOCK && (!config.GIT.SSH_COMMAND || !config.GIT.SSH_COMMAND.includes('-i'))) {
+                console.warn(`[Git Warning] Tentative d'accès SSH détectée (${command} ${args.join(' ')}), mais SSH_AUTH_SOCK n'est pas défini et aucune clé n'est forcée via GIT_SSH_COMMAND. L'authentification risque d'échouer.`);
+            }
+
             const env = this.buildGitEnvironment();
             console.log(`[Git] Executing: ${command} ${args.join(' ')} in ${cwd || 'root'}`);
             const result = spawnSync(command, args, {

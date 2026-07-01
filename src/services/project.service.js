@@ -35,12 +35,37 @@ class ProjectService {
         return projects;
     }
 
+    logWebhookCommand(project) {
+        const creds = config.getTrelloCredentials(project);
+        const idModel = project.trello?.boardId || project.trello?.targetListId;
+        
+        const key = creds.key || '<VOTRE_TRELLO_KEY>';
+        const token = creds.token || '<VOTRE_TRELLO_TOKEN>';
+        const callbackUrl = creds.callbackUrl || '<VOTRE_TRELLO_CALLBACK_URL>';
+
+        console.log(`[Dry Run] [Projet: ${project.name || 'Inconnu'}] Commande pour créer le webhook Trello :`);
+        
+        console.log(`curl -X POST -H "Content-Type: application/json" \\
+  "https://api.trello.com/1/webhooks/?key=${key}&token=${token}" \\
+  -d '{
+    "description": "Junie Bridge Webhook - ${project.name || 'Projet'}",
+    "callbackURL": "${callbackUrl}",
+    "idModel": "${idModel || '<ID_DU_TABLEAU_OU_DE_LA_LISTE>'}"
+  }'`);
+        console.log('------------------------------------------------------------');
+    }
+
     async initializeProjects(gitService) {
         console.log(`[${new Date().toISOString()}] Initialisation des espaces de travail des projets...`);
         const projects = this.loadProjects();
         
         for (const project of projects) {
             const projectKey = project.name || project.trello.boardId || 'unknown';
+
+            if (config.DRY_RUN) {
+                this.logWebhookCommand(project);
+            }
+
             const projectWorkspace = gitService.cleanProjectWorkspace(projectKey);
             
             console.log(`[Init] Configuration du projet : ${projectKey}`);
