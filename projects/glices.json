@@ -1,8 +1,11 @@
 {
   "name": "Glices Project",
   "trello": {
-    "targetListId": "65818e69818e69818e69818e",
-    "doneListId": "65818e69818e69818e69818f"
+    "boardId": "6a44ba847791e3b698e688d7",
+    "targetListName": "A développer",
+    "inProgressListName": "En cours",
+    "doneListName": "Réalisé",
+    "blockedListName": "Bloqué"
   },
   "repos": [
     "git@github.com:phoenix-fr/glices-api.git",

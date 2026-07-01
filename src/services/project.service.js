@@ -15,7 +15,7 @@ class ProjectService {
     }
 
     loadProjects() {
-        const projects = {};
+        const projects = [];
         if (fs.existsSync(this.projectsDir)) {
             const files = fs.readdirSync(this.projectsDir);
             files.forEach(file => {
@@ -23,8 +23,8 @@ class ProjectService {
                     try {
                         const content = fs.readFileSync(path.join(this.projectsDir, file), 'utf8');
                         const projectConfig = JSON.parse(content);
-                        if (projectConfig.trello && projectConfig.trello.targetListId) {
-                            projects[projectConfig.trello.targetListId] = projectConfig;
+                        if (projectConfig.trello) {
+                            projects.push(projectConfig);
                         }
                     } catch (e) {
                         console.error(`Error loading project ${file}:`, e.message);

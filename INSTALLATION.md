@@ -30,6 +30,36 @@ Trello a migré la gestion de ses clés API vers le portail des Power-Ups. Voici
    - Rendez-vous sur `http://votre-serveur:3000/` (ou `/auth/trello`).
    - Autorisez l'accès. Le token sera automatiquement récupéré et sauvegardé sur votre serveur dans un fichier `.trello_token`. Vous n'avez plus besoin de le configurer manuellement.
 
+4. **Récupérer l'ID du Tableau (Board ID) et des Listes** :
+   - **Méthode Tableau (URL .json)** : 
+     1. Ouvrez votre tableau Trello dans votre navigateur.
+     2. Ajoutez `.json` à la fin de l'URL (ex: `https://trello.com/b/abc/mon-tableau.json`) et appuyez sur Entrée.
+     3. L'ID du tableau est la valeur du champ `"id"` tout au début du fichier.
+     4. Pour les listes, cherchez (Ctrl+F) le nom de votre liste (ex: "À faire") pour trouver son `"id"`.
+   - **Méthode Carte (URL .json)** :
+     1. Ouvrez n'importe quelle carte située dans la liste que vous voulez identifier.
+     2. Ajoutez `.json` à la fin de l'URL dans la barre d'adresse et appuyez sur Entrée.
+     3. Cherchez (Ctrl+F) le champ `"idList"`. La valeur associée est l'ID de la liste.
+
+5. **Utilisation des noms de listes (Recommandé)** :
+   Le bridge peut maintenant identifier les listes par leur nom. Si vous utilisez les noms suivants, aucune configuration d'ID de liste n'est nécessaire (seul le `boardId` est requis dans votre projet) :
+   - Cible (déclenche Junie) : **"A développer"**
+   - En cours (pendant le travail) : **"En cours"**
+   - Succès (déplacement après Junie) : **"Réalisé"**
+   - Échec (déplacement si erreur) : **"Bloqué"**
+
+---
+
+## Workflow Automatisé
+
+Le bridge suit un workflow précis pour chaque ticket :
+1. **Trigger** : Vous déplacez une carte dans la colonne **"A développer"**.
+2. **Initialisation** : Le bridge déplace la carte dans **"En cours"** et ajoute un commentaire avec le plan de réalisation (dépôts ciblés, branche).
+3. **Exécution** : Le bridge prépare le code (clone/branche) et lance Junie CLI.
+4. **Finalisation** :
+   - Si succès : La carte est déplacée dans **"Réalisé"** avec un résumé des métriques (coût/tokens).
+   - Si erreur : La carte est déplacée dans **"Bloqué"** avec le détail de l'erreur rencontrée.
+
 ---
 
 ## Méthode 1 : Docker (Recommandé)
@@ -87,8 +117,11 @@ Exemple `projects/mon-projet.json` :
 {
   "name": "Mon Projet",
   "trello": {
-    "targetListId": "ID_LISTE_A_SURVEILLER",
-    "doneListId": "ID_LISTE_DE_FIN"
+    "boardId": "ID_DU_TABLEAU",
+    "targetListName": "A développer",
+    "inProgressListName": "En cours",
+    "doneListName": "Réalisé",
+    "blockedListName": "Bloqué"
   },
   "repos": [
     "git@github.com:votre-compte/votre-repo.git"
@@ -98,8 +131,9 @@ Exemple `projects/mon-projet.json` :
 
 La configuration Trello est volontairement séparée :
 - **Global (`.env`)** : `TRELLO_KEY`, `TRELLO_SECRET`, `TRELLO_CALLBACK_URL` et le token sauvegardé automatiquement dans `.trello_token`, car ils décrivent l'intégration Trello et le serveur.
-- **Projet (`projects/*.json`)** : `targetListId`, `doneListId`, `repos`, et éventuellement `junieApiKey` si un projet doit utiliser une clé Junie différente. `doneListId` est recommandé ; s'il est absent, la carte sera commentée mais pas déplacée après succès.
-- **Exception** : `key`, `secret` et `callbackUrl` peuvent encore être placés dans un projet pour un cas multi-Power-Up, mais ce n'est pas le mode recommandé.
+- **Projet (`projects/*.json`)** : `boardId`, `targetListName`, `doneListName`, `failListName`, `repos`, et éventuellement `junieApiKey` si un projet doit utiliser une clé Junie différente. 
+
+> **Note sur les IDs** : Vous pouvez toujours utiliser `targetListId`, `doneListId` et `failListId` si vous préférez figer la configuration sur des IDs techniques.
 
 ---
 

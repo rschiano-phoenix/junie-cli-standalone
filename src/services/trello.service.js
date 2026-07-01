@@ -21,6 +21,18 @@ class TrelloService {
         return response.data;
     }
 
+    async getBoardLists(boardId, credentials) {
+        const { key, token } = credentials;
+        const response = await axios.get(`https://api.trello.com/1/boards/${boardId}/lists?key=${key}&token=${token}`);
+        return response.data;
+    }
+
+    async getListIdByName(boardId, listName, credentials) {
+        const lists = await this.getBoardLists(boardId, credentials);
+        const list = lists.find(l => l.name.toLowerCase() === listName.toLowerCase());
+        return list ? list.id : null;
+    }
+
     async moveCard(cardId, listId, credentials) {
         if (config.DRY_RUN) {
             console.log(`[Trello] [DRY RUN] Would move card ${cardId} to list ${listId}`);

@@ -38,6 +38,7 @@ config.getTrelloCredentials = function getTrelloCredentials(project = {}) {
         token: config.TRELLO.TOKEN,
         secret: project.trello?.secret || config.TRELLO.SECRET,
         callbackUrl: project.trello?.callbackUrl || config.TRELLO.CALLBACK_URL,
+        boardId: project.trello?.boardId
     };
 };
 
