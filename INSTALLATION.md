@@ -180,8 +180,8 @@ Exemple `projects/mon-projet.json` :
 
 La configuration Trello est volontairement séparée :
 - **Global (`.env`)** : `TRELLO_KEY`, `TRELLO_SECRET`, `TRELLO_CALLBACK_URL` et le token sauvegardé automatiquement dans `.trello_token`, car ils décrivent l'intégration Trello et le serveur.
-- **Global Git (`.env`)** : `SSH_AUTH_SOCK`, `GIT_SSH_COMMAND` et `GIT_COMMAND_TIMEOUT_MS`, car ils décrivent la manière dont le serveur exécute `git`.
-- **Projet (`projects/*.json`)** : `boardId`, `targetListName`, `doneListName`, `failListName`, `repos`, et éventuellement `junieApiKey` si un projet doit utiliser une clé Junie différente.
+- **Global Git (`.env`)** : `SSH_AUTH_SOCK`, `GIT_SSH_COMMAND`, `GIT_COMMAND_TIMEOUT_MS`, `GIT_USER_NAME` et `GIT_USER_EMAIL`, car ils décrivent la manière dont le serveur exécute `git`.
+- **Projet (`projects/*.json`)** : `boardId`, `baseBranch` (ex: "main"), `targetListName`, `doneListName`, `failListName`, `repos`, et éventuellement `junieApiKey` si un projet doit utiliser une clé Junie différente.
 
 > **Note sur les IDs** : Vous pouvez toujours utiliser `targetListId`, `doneListId` et `failListId` si vous préférez figer la configuration sur des IDs techniques.
 

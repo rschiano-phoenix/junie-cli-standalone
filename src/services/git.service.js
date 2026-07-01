@@ -64,6 +64,10 @@ class GitService {
         const env = {
             ...process.env,
             GIT_TERMINAL_PROMPT: '0',
+            GIT_AUTHOR_NAME: config.GIT.USER_NAME,
+            GIT_AUTHOR_EMAIL: config.GIT.USER_EMAIL,
+            GIT_COMMITTER_NAME: config.GIT.USER_NAME,
+            GIT_COMMITTER_EMAIL: config.GIT.USER_EMAIL,
         };
 
         if (config.GIT.SSH_COMMAND) {
@@ -93,7 +97,7 @@ class GitService {
         return this.runCommand('git', ['checkout', branchName], cwd);
     }
 
-    async setupRepo(repoUrl, projectWorkspace, branchName) {
+    async setupRepo(repoUrl, projectWorkspace, branchName, baseBranch = 'develop') {
         const repoName = path.basename(repoUrl, '.git');
         const localPath = path.join(projectWorkspace, repoName);
 
@@ -102,9 +106,9 @@ class GitService {
             return { success: false, repoName, error: 'Clone failed' };
         }
 
-        // Checkout develop
-        if (!await this.runCommand('git', ['checkout', 'develop'], localPath)) {
-            return { success: false, repoName, error: 'Checkout develop failed' };
+        // Checkout base branch
+        if (!await this.runCommand('git', ['checkout', baseBranch], localPath)) {
+            return { success: false, repoName, error: `Checkout ${baseBranch} failed` };
         }
 
         // Create and checkout branch
@@ -113,6 +117,22 @@ class GitService {
         }
 
         return { success: true, repoName, localPath };
+    }
+
+    async getDiffStat(cwd, branchName, baseBranch = 'develop') {
+        try {
+            if (config.DRY_RUN) return "1 file changed, 10 insertions(+), 5 deletions(-)";
+            
+            const env = this.buildGitEnvironment();
+            const result = spawnSync('git', ['diff', '--stat', baseBranch, branchName], {
+                cwd,
+                env,
+                encoding: 'utf8'
+            });
+            return result.stdout.trim() || "Aucun changement détecté par git diff.";
+        } catch (e) {
+            return "Erreur lors de la récupération des statistiques diff.";
+        }
     }
 }
 

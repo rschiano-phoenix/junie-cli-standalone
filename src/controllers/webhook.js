@@ -97,6 +97,7 @@ Je commence tout de suite ! 🚀`;
             await trelloService.addComment(cardId, planComment, credentials);
 
             const branchName = `trello/${card.idShort}`;
+            const baseBranch = project.baseBranch || 'develop';
             const apiKey = config.getJunieApiKey(project);
 
             if (!apiKey) {
@@ -118,30 +119,19 @@ Je commence tout de suite ! 🚀`;
             const results = [];
 
             for (const repoUrl of (project.repos || [])) {
-                const setup = await gitService.setupRepo(repoUrl, projectWorkspace, branchName);
+                const setup = await gitService.setupRepo(repoUrl, projectWorkspace, branchName, baseBranch);
                 
                 if (!setup.success) {
                     results.push({ code: 1, repo: setup.repoName, error: setup.error, cost: '0.00$', tokens: '0' });
                     continue;
                 }
 
-                // Mesure de la consommation avant l'exécution
-                const beforeUsage = await junieService.getUsage(apiKey);
-
                 const result = await junieService.run(setup.localPath, card, apiKey);
-
-                // Mesure de la consommation après l'exécution
-                const afterUsage = await junieService.getUsage(apiKey);
-
-                // Calcul de la différence réelle consommée
-                const consumedCost = Math.max(0, afterUsage.cost - beforeUsage.cost);
-                const consumedTokens = Math.max(0, afterUsage.tokens - beforeUsage.tokens);
-
-                // Mise à jour du résultat avec les valeurs réelles
-                result.cost = `$${consumedCost.toFixed(2)}`;
-                result.tokens = consumedTokens.toString();
                 
                 if (result.code === 0) {
+                    // Get diff stats before switching back
+                    result.diffStat = await gitService.getDiffStat(setup.localPath, branchName, baseBranch);
+
                     // Commit & Push
                     const commitMsg = `Junie: ${card.name} (Trello #${card.idShort})`;
                     const committed = await gitService.commit(setup.localPath, commitMsg);
@@ -150,8 +140,8 @@ Je commence tout de suite ! 🚀`;
                         await gitService.push(setup.localPath, branchName);
                     }
 
-                    // Retour sur develop
-                    await gitService.checkout(setup.localPath, 'develop');
+                    // Retour sur branche de base
+                    await gitService.checkout(setup.localPath, baseBranch);
                 }
 
                 results.push(result);
@@ -184,9 +174,13 @@ Je commence tout de suite ! 🚀`;
             }
         });
 
-        const summary = results.map(r => 
-            `- **${r.repo}** : ${r.code === 0 ? '✅ Réussi' : '❌ Échoué (' + (r.error || 'Erreur ' + r.code) + ')'} (Coût : ${r.cost}, Tokens : ${r.tokens})`
-        ).join('\n');
+        const summary = results.map(r => {
+            let line = `- **${r.repo}** : ${r.code === 0 ? '✅ Réussi' : '❌ Échoué (' + (r.error || 'Erreur ' + r.code) + ')'} (Coût : ${r.cost}, Tokens : ${r.tokens})`;
+            if (r.diffStat) {
+                line += `\n  \`\`\`text\n  ${r.diffStat.split('\n').join('\n  ')}\n  \`\`\``;
+            }
+            return line;
+        }).join('\n');
 
         const consumptionSummary = `💰 **Consommation totale** : $${totalCost.toFixed(2)} | 🪙 **Tokens** : ${totalTokens.toLocaleString()}`;
         const finalComment = `J'ai terminé mon travail ! Voici un petit résumé de ce qui a été fait :\n\n${summary}\n\n${consumptionSummary}`;
