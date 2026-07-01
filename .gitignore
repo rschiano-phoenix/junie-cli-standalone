@@ -11,6 +11,8 @@ yarn-error.log*
 # Runtime data
 workspace/
 .trello_token
+.junie/memory/
+.junie/plans/
 
 # Environment variables
 .env
