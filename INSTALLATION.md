@@ -56,10 +56,11 @@ Trello a migré la gestion de ses clés API vers le portail des Power-Ups. Voici
 Le bridge suit un workflow précis pour chaque ticket :
 0. **Préparation** : À l'initialisation du serveur, tous les projets configurés dans le dossier `projects/` sont clonés dans le dossier `workspace/` pour s'assurer que l'environnement est prêt.
 1. **Trigger** : Vous déplacez une carte dans la colonne **"A développer"**.
-2. **Initialisation** : Le bridge déplace la carte dans **"En cours"** et ajoute un commentaire avec le plan de réalisation (dépôts ciblés, branche).
-3. **Exécution** : Le bridge prépare le code (clone/branche) et lance Junie CLI.
-4. **Finalisation** :
-   - Si succès : La carte est déplacée dans **"Réalisé"** avec un résumé des métriques (coût/tokens).
+2. **Initialisation** : Le bridge déplace la carte dans **"En cours"** et ajoute un message de bienvenue détaillant le plan d'action.
+3. **Exécution** : Le bridge prépare le code, crée une branche `trello/ID`, et lance Junie CLI. À chaque étape (analyse, modifications), un commentaire est ajouté sur Trello pour vous tenir informé.
+4. **Synchronisation** : Si Junie réussit, les changements sont automatiquement commités et poussés sur le dépôt distant. Le dépôt local repasse ensuite sur la branche `develop`.
+5. **Finalisation** :
+   - Si succès : La carte est déplacée dans **"Réalisé"** avec un rapport détaillé incluant la consommation totale (coût et tokens).
    - Si erreur : La carte est déplacée dans **"Bloqué"** avec le détail de l'erreur rencontrée.
 
 ---

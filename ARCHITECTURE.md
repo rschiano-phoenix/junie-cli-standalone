@@ -27,7 +27,7 @@ Les services encapsulent la logique métier pour chaque intégration externe :
 
 - **`project.service.js`** : Charge et gère les fichiers de configuration situés dans le dossier `projects/`. Il permet de retrouver quel projet est concerné par un webhook Trello.
 - **`trello.service.js`** : Gère toute la communication avec l'API Trello (récupérer une carte, la déplacer, ajouter un commentaire) et la vérification de la signature HMAC pour la sécurité.
-- **`git.service.js`** : Responsable des opérations Git. Il nettoie le workspace, clone les dépôts, se place sur la branche `develop` et crée une branche spécifique pour le ticket Trello. Les commandes restent des commandes `git` standards et peuvent utiliser SSH via `ssh-agent`, `SSH_AUTH_SOCK` et `GIT_SSH_COMMAND`.
+- **`git.service.js`** : Responsable des opérations Git. Il nettoie le workspace, clone les dépôts, se place sur la branche `develop` et crée une branche spécifique pour le ticket Trello. Il gère également le commit et le push automatique des modifications apportées par Junie avant de revenir sur la branche de référence (`develop`). Les commandes restent des commandes `git` standards et peuvent utiliser SSH via `ssh-agent`, `SSH_AUTH_SOCK` et `GIT_SSH_COMMAND`.
 - **`junie.service.js`** : Orchestre l'exécution de Junie CLI via des sous-processus. Il capture la sortie pour extraire les métriques de consommation (coût, tokens).
 
 ### Mode Dry Run
@@ -62,4 +62,5 @@ Utilisé comme zone de travail temporaire. Lors de l'initialisation du serveur, 
 4. **`WebhookController`** identifie le projet.
 5. **`GitService`** prépare le code source dans `workspace/`.
 6. **`JunieService`** traite la demande.
-7. **`TrelloService`** met à jour le ticket.
+7. **`GitService`** commite et pousse les changements sur la branche du ticket, puis repasse sur la branche `develop`.
+8. **`TrelloService`** met à jour le ticket avec un rapport détaillé incluant la consommation totale (coût et tokens) et déplace la carte vers la liste finale.
