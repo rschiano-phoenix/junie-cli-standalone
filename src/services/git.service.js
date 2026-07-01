@@ -33,7 +33,7 @@ class GitService {
         try {
             if (config.DRY_RUN) {
                 console.log(`[Git] [DRY RUN] Executing: ${this.formatCommand(command, args)} in ${cwd || 'root'}`);
-                return true;
+                return { success: true, stdout: '', stderr: '', status: 0 };
             }
 
             const isSsh = args.some(arg => typeof arg === 'string' && (arg.includes('git@') || arg.includes('ssh://')));
@@ -157,8 +157,15 @@ class GitService {
             }
         }
 
-        // 2. Tenter de réutiliser la branche si elle existe (locale ou distante via origin/branchName)
-        const checkoutBranch = await this.runCommand('git', ['checkout', branchName], localPath);
+        // 2. Tenter de réutiliser la branche si elle existe
+        // On essaie d'abord un checkout simple (marche si locale ou unique sur remote)
+        let checkoutBranch = await this.runCommand('git', ['checkout', branchName], localPath);
+        
+        // Si ça échoue, on tente de la traquer explicitement depuis origin
+        if (!checkoutBranch.success) {
+            checkoutBranch = await this.runCommand('git', ['checkout', '-t', `origin/${branchName}`], localPath);
+        }
+
         if (checkoutBranch.success) {
             console.log(`[Git] Branche ${branchName} trouvée, utilisation de la branche existante.`);
             // Si ce n'est pas la branche de base, on essaie de pull les nouveautés
@@ -182,6 +189,14 @@ class GitService {
         // Create and checkout new branch
         const createBranch = await this.runCommand('git', ['checkout', '-b', branchName], localPath);
         if (!createBranch.success) {
+            // Si l'erreur est "already exists", on tente un checkout simple avant d'abandonner
+            if (createBranch.stderr?.includes('already exists') || createBranch.stdout?.includes('already exists')) {
+                console.log(`[Git] Branche ${branchName} déjà existante localement, basculement...`);
+                const retryCheckout = await this.runCommand('git', ['checkout', branchName], localPath);
+                if (retryCheckout.success) {
+                    return { success: true, repoName, localPath };
+                }
+            }
             return { success: false, repoName, error: `Failed to create branch ${branchName}: ${createBranch.stderr || createBranch.error}` };
         }
         
