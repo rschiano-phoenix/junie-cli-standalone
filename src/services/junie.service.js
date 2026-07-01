@@ -3,6 +3,36 @@ const path = require('path');
 const config = require('../config/config');
 
 class JunieService {
+    async getUsage(apiKey) {
+        if (config.DRY_RUN) {
+            return { cost: 0, tokens: 0 };
+        }
+        return new Promise((resolve) => {
+            console.log(`[Junie] Récupération de l'usage actuel...`);
+            // On lance Junie avec la commande /usage pour récupérer l'état actuel du compte
+            const junie = spawn('junie', ['--auth', apiKey, '/usage'], {
+                env: { ...process.env, JUNIE_API_KEY: apiKey }
+            });
+
+            let output = '';
+            junie.stdout.on('data', d => { output += d.toString(); });
+            junie.stderr.on('data', d => { output += d.toString(); });
+
+            junie.on('close', () => {
+                const costMatch = output.match(/Total cost[:\s]+(\$[\d.,]+)/i);
+                const tokensMatch = output.match(/Total tokens[:\s]+([\d.,]+)/i);
+                
+                const costStr = costMatch ? costMatch[1].replace(/[^\d.]/g, '') : '0';
+                const tokensStr = tokensMatch ? tokensMatch[1].replace(/[^\d]/g, '') : '0';
+                
+                resolve({
+                    cost: parseFloat(costStr) || 0,
+                    tokens: parseInt(tokensStr, 10) || 0
+                });
+            });
+        });
+    }
+
     async run(repoPath, card, apiKey) {
         if (config.DRY_RUN) {
             const timestamp = new Date().toISOString();
