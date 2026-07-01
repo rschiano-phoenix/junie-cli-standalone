@@ -11,6 +11,14 @@ class WebhookController {
     }
 
     async handleWebhook(req, res) {
+        return this.handleCommonWebhook(req, res, 'initial');
+    }
+
+    async handleImprovementWebhook(req, res) {
+        return this.handleCommonWebhook(req, res, 'improve');
+    }
+
+    async handleCommonWebhook(req, res, type) {
         const { action } = req.body;
         const listId = action?.data?.listAfter?.id;
         const listName = action?.data?.listAfter?.name;
@@ -22,25 +30,32 @@ class WebhookController {
         const loadedProjects = projectService.loadProjects();
         
         // Find project by listId OR (boardId AND listName)
-        const project = loadedProjects.find(p => 
-            (p.trello.targetListId === listId) || 
-            (p.trello.boardId === boardId && p.trello.targetListName && p.trello.targetListName.toLowerCase() === listName?.toLowerCase()) ||
-            (p.trello.boardId === boardId && !p.trello.targetListId && !p.trello.targetListName && listName?.toLowerCase() === "a développer")
-        );
+        const project = loadedProjects.find(p => {
+            const configTrello = p.trello;
+            if (type === 'initial') {
+                return (configTrello.targetListId === listId) || 
+                       (configTrello.boardId === boardId && configTrello.targetListName && configTrello.targetListName.toLowerCase() === listName?.toLowerCase()) ||
+                       (configTrello.boardId === boardId && !configTrello.targetListId && !configTrello.targetListName && listName?.toLowerCase() === "a développer");
+            } else {
+                return (configTrello.improveListId === listId) || 
+                       (configTrello.boardId === boardId && configTrello.improveListName && configTrello.improveListName.toLowerCase() === listName?.toLowerCase()) ||
+                       (configTrello.boardId === boardId && !configTrello.improveListId && !configTrello.improveListName && listName?.toLowerCase() === "a reprendre");
+            }
+        });
 
         if (!project) {
-            console.log(`[Webhook] No project found for list ID: ${listId} or Name: ${listName} on Board: ${boardId}. Skipping.`);
+            console.log(`[Webhook] [${type}] No project found for list ID: ${listId} or Name: ${listName} on Board: ${boardId}. Skipping.`);
             return res.sendStatus(200);
         }
 
         if (action?.type === 'updateCard') {
-            await this.processCard(req, res, project);
+            await this.processCard(req, res, project, type);
         } else {
             res.sendStatus(200);
         }
     }
 
-    async processCard(req, res, project) {
+    async processCard(req, res, project, type = 'initial') {
         const { action } = req.body;
         const cardId = action.data.card.id;
         const projectKey = project.name || project.trello.targetListId || project.trello.targetListName || project.trello.boardId;
@@ -72,6 +87,15 @@ class WebhookController {
 
         try {
             const card = await trelloService.getCard(cardId, credentials);
+            let instruction = card.desc || card.name;
+
+            if (type === 'improve') {
+                const comments = await trelloService.getCardComments(cardId, credentials);
+                if (comments && comments.length > 0) {
+                    // Les commentaires sont triés du plus récent au plus ancien
+                    instruction = comments[0].data.text;
+                }
+            }
 
             // Move to "En cours" (In Progress)
             let inProgressListId = project.trello.inProgressListId;
@@ -85,11 +109,12 @@ class WebhookController {
 
             // Add plan comment
             const reposText = (project.repos || []).map(r => `- ${r}`).join('\n');
-            const planComment = `👋 Bonjour ! Je m'occupe de ce ticket.
+            const introMsg = type === 'improve' ? "Je vais appliquer les modifications demandées !" : "Je m'occupe de ce ticket.";
+            const planComment = `👋 Bonjour ! ${introMsg}
 
 Voici mon plan d'action pour aujourd'hui :
 1. Préparer un espace de travail tout propre.
-2. Créer une branche dédiée \`trello/${card.idShort}\` sur chaque dépôt.
+2. Récupérer ou créer la branche dédiée \`trello/${card.idShort}\` sur chaque dépôt.
 3. Laisser Junie opérer sa magie sur :
 ${reposText}
 4. Vous faire un rapport complet dès que j'ai fini.
@@ -107,7 +132,8 @@ Je commence tout de suite ! 🚀`;
                 return;
             }
 
-            console.log(`[Webhook] Processing card: ${card.name} for ${projectKey}`);
+            console.log(`[Webhook] [${type}] Processing card: ${card.name} for ${projectKey}`);
+            console.log(`[Webhook] [${type}] Instruction: ${instruction.substring(0, 50)}...`);
 
             if (!Array.isArray(project.repos) || project.repos.length === 0) {
                 console.error(`[Webhook] No repository configured for project: ${projectKey}.`);
@@ -127,7 +153,7 @@ Je commence tout de suite ! 🚀`;
                     continue;
                 }
 
-                const result = await junieService.run(setup.localPath, card, apiKey);
+                const result = await junieService.run(setup.localPath, instruction, apiKey);
                 
                 if (result.code === 0) {
                     // Get diff stats before switching back

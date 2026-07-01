@@ -44,13 +44,25 @@ class ProjectService {
         const token = creds.token ? maskSecret(creds.token) : '<VOTRE_TRELLO_TOKEN>';
         const callbackUrl = creds.callbackUrl || '<VOTRE_TRELLO_CALLBACK_URL>';
 
-        console.log(`[Dry Run] [Projet: ${project.name || 'Inconnu'}] Commande pour créer le webhook Trello :`);
+        console.log(`[Dry Run] [Projet: ${project.name || 'Inconnu'}] Commandes pour créer les webhooks Trello :`);
         console.log('[Dry Run] Les secrets sont masqués dans les logs. Remplacez les valeurs TRELLO_KEY/TRELLO_TOKEN si vous copiez cette commande.');
+        
+        console.log(`1. Webhook Initial (A développer) :`);
         console.log(`curl -X POST -H "Content-Type: application/json" \\
   "https://api.trello.com/1/webhooks/?key=${key}&token=${token}" \\
   -d '{
-    "description": "Junie Bridge Webhook - ${project.name || 'Projet'}",
+    "description": "Junie Bridge Initial - ${project.name || 'Projet'}",
     "callbackURL": "${callbackUrl}",
+    "idModel": "${idModel || '<ID_DU_TABLEAU_OU_DE_LA_LISTE>'}"
+  }'`);
+
+        console.log(`2. Webhook Amélioration (A reprendre) :`);
+        const improveUrl = callbackUrl.endsWith('/webhook') ? `${callbackUrl}/improve` : `${callbackUrl}/webhook/improve`;
+        console.log(`curl -X POST -H "Content-Type: application/json" \\
+  "https://api.trello.com/1/webhooks/?key=${key}&token=${token}" \\
+  -d '{
+    "description": "Junie Bridge Improve - ${project.name || 'Projet'}",
+    "callbackURL": "${improveUrl}",
     "idModel": "${idModel || '<ID_DU_TABLEAU_OU_DE_LA_LISTE>'}"
   }'`);
         console.log('------------------------------------------------------------');

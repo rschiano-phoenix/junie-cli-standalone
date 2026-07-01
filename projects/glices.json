@@ -3,6 +3,7 @@
   "trello": {
     "boardId": "6a44ba847791e3b698e688d7",
     "targetListName": "A développer",
+    "improveListName": "A reprendre",
     "inProgressListName": "En cours",
     "doneListName": "Réalisé",
     "blockedListName": "Bloqué"

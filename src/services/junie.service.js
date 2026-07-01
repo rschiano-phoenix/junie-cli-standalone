@@ -6,12 +6,12 @@ const { maskSecret } = require('../utils/format');
 const MAX_CAPTURED_OUTPUT_LENGTH = 100000;
 
 class JunieService {
-    async run(repoPath, card, apiKey) {
+    async run(repoPath, instruction, apiKey) {
         if (config.DRY_RUN) {
             const timestamp = new Date().toISOString();
             console.log(`[${timestamp}] [DRY RUN] Starting Junie in: ${repoPath}`);
             const maskedApiKey = maskSecret(apiKey, 5);
-            console.log(`[Junie] [DRY RUN] Command: junie --auth ${maskedApiKey} --brave "${card.desc || card.name}"`);
+            console.log(`[Junie] [DRY RUN] Command: junie --auth ${maskedApiKey} --brave "${instruction}"`);
             return {
                 code: 0,
                 cost: '$0.00 (Dry Run)',
@@ -23,7 +23,7 @@ class JunieService {
             const timestamp = new Date().toISOString();
             console.log(`[${timestamp}] Starting Junie in: ${repoPath}`);
 
-            const junie = spawn('junie', ['--auth', apiKey, '--brave', card.desc || card.name], {
+            const junie = spawn('junie', ['--auth', apiKey, '--brave', instruction], {
                 cwd: repoPath,
                 env: { ...process.env, JUNIE_API_KEY: apiKey },
                 timeout: config.GIT.COMMAND_TIMEOUT_MS,

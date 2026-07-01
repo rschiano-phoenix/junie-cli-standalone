@@ -119,9 +119,14 @@ class GitService {
             return { success: false, repoName, error: `Checkout ${baseBranch} failed` };
         }
 
-        // Create and checkout branch
-        if (!await this.runCommand('git', ['checkout', '-b', branchName], localPath)) {
-            return { success: false, repoName, error: `Failed to create branch ${branchName}` };
+        // Try to checkout existing branch (local or remote)
+        const branchExists = await this.runCommand('git', ['checkout', branchName], localPath);
+
+        if (!branchExists) {
+            // Create and checkout branch if it doesn't exist
+            if (!await this.runCommand('git', ['checkout', '-b', branchName], localPath)) {
+                return { success: false, repoName, error: `Failed to create branch ${branchName}` };
+            }
         }
 
         return { success: true, repoName, localPath };

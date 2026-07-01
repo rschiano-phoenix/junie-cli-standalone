@@ -165,9 +165,11 @@ Exemple `projects/mon-projet.json` :
 ```json
 {
   "name": "Mon Projet",
+  "baseBranch": "develop",
   "trello": {
     "boardId": "ID_DU_TABLEAU",
     "targetListName": "A développer",
+    "improveListName": "A reprendre",
     "inProgressListName": "En cours",
     "doneListName": "Réalisé",
     "blockedListName": "Bloqué"
@@ -181,26 +183,22 @@ Exemple `projects/mon-projet.json` :
 La configuration Trello est volontairement séparée :
 - **Global (`.env`)** : `TRELLO_KEY`, `TRELLO_SECRET`, `TRELLO_CALLBACK_URL` et le token sauvegardé automatiquement dans `.trello_token`, car ils décrivent l'intégration Trello et le serveur.
 - **Global Git (`.env`)** : `SSH_AUTH_SOCK`, `GIT_SSH_COMMAND`, `GIT_COMMAND_TIMEOUT_MS`, `GIT_USER_NAME` et `GIT_USER_EMAIL`, car ils décrivent la manière dont le serveur exécute `git`.
-- **Projet (`projects/*.json`)** : `boardId`, `baseBranch` (ex: "main"), `targetListName`, `doneListName`, `failListName`, `repos`, et éventuellement `junieApiKey` si un projet doit utiliser une clé Junie différente.
+- **Projet (`projects/*.json`)** : `boardId`, `baseBranch`, `targetListName`, `improveListName`, `doneListName`, `failListName`, `repos`, et éventuellement `junieApiKey`.
 
-> **Note sur les IDs** : Vous pouvez toujours utiliser `targetListId`, `doneListId` et `failListId` si vous préférez figer la configuration sur des IDs techniques.
+> **Note sur les IDs** : Vous pouvez utiliser `targetListId` ou `improveListId` si vous préférez figer la configuration sur des IDs techniques plutôt que sur des noms de listes.
 
 ---
 
-## Création du Webhook Trello
+## Création des Webhooks Trello
 
-Pour que Trello envoie les événements au bridge, vous devez créer un webhook manuellement (une seule fois par projet).
+Pour que Trello envoie les événements au bridge, vous devez créer les webhooks (une seule fois par projet).
 
-> **Astuce** : Si vous lancez le bridge avec `DRY_RUN=true`, il affichera automatiquement dans les logs une commande `curl` prête à compléter pour chacun de vos projets configurés. Par sécurité, la clé et le token Trello sont masqués dans les logs : remplacez-les par vos valeurs réelles uniquement au moment d'exécuter la commande.
+> **Astuce** : Si vous lancez le bridge avec `DRY_RUN=true`, il affichera automatiquement dans les logs les commandes `curl` exactes à exécuter pour vos webhooks (**Initial** et **Amélioration**).
 
-```bash
-curl -X POST -H "Content-Type: application/json" \
-  "https://api.trello.com/1/webhooks/?key=VOTRE_TRELLO_KEY&token=VOTRE_TOKEN" \
-  -d '{
-    "description": "Junie Bridge Webhook",
-    "callbackURL": "https://votre-domaine.com/webhook",
-    "idModel": "ID_LISTE_A_SURVEILLER"
-  }'
-```
+### Webhook Initial (A développer)
+Utilise le `/webhook` standard. Il se base sur la description de la carte pour la première analyse.
+
+### Webhook Amélioration (A reprendre)
+Utilise `/webhook/improve`. Il se base sur le **dernier commentaire** de la carte pour donner ses instructions à Junie, et réutilise la branche `trello/{id}` existante.
 
 Le bridge validera automatiquement la signature HMAC du webhook lors de la réception des événements.

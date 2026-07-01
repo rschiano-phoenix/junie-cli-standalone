@@ -55,6 +55,17 @@ class TrelloService {
         });
     }
 
+    async getCardComments(cardId, credentials) {
+        const response = await axios.get(`https://api.trello.com/1/cards/${encodeURIComponent(cardId)}/actions`, {
+            params: {
+                ...this.buildAuthParams(credentials),
+                filter: 'commentCard',
+                limit: 50
+            },
+        });
+        return response.data;
+    }
+
     buildAuthParams(credentials) {
         return {
             key: credentials.key,
