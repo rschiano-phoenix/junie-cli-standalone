@@ -37,8 +37,8 @@ Si la variable d'environnement `DRY_RUN` est définie à `true`, le bridge simul
 ### 3. Contrôleurs (`src/controllers/`)
 Les contrôleurs orchestrent les services pour répondre aux requêtes entrantes :
 
-- **`webhook.controller.js`** : Reçoit les webhooks Trello. Il valide la signature, prépare le code source via `GitService`, lance Junie via `JunieService` et met à jour Trello via `TrelloService`.
-- **`auth.controller.js`** : Gère le flux d'authentification Trello. Il fournit une interface simple pour générer le `TRELLO_TOKEN` nécessaire à l'application.
+- **`webhook.js`** : Reçoit les webhooks Trello. Il valide la signature, prépare le code source via `GitService`, lance Junie via `JunieService` et met à jour Trello via `TrelloService`.
+- **`auth.js`** : Gère le flux d'authentification Trello. Il fournit une interface simple pour générer le `TRELLO_TOKEN` nécessaire à l'application.
 
 ### 4. Configuration (`src/config/config.js`)
 Centralise toutes les variables d'environnement (`.env`), charge le token Trello persistant (`.trello_token`) et définit les chemins absolus pour éviter les erreurs de contexte lors de l'exécution (notamment sous Docker).

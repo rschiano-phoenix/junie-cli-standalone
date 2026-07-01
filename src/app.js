@@ -1,6 +1,6 @@
 const express = require('express');
-const webhookController = require('./controllers/webhook.controller');
-const authController = require('./controllers/auth.controller');
+const webhookController = require('./controllers/webhook');
+const authController = require('./controllers/auth');
 
 const app = express();
 
