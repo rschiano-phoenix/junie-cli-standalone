@@ -6,7 +6,9 @@
     "improveListName": "A reprendre",
     "inProgressListName": "En cours",
     "doneListName": "Réalisé",
-    "blockedListName": "Bloqué"
+    "blockedListName": "Bloqué",
+    "reviewListName": "À déployer en review",
+    "deployedListName": "Déployé"
   },
   "repos": [
     "git@github.com:phoenix-fr/glices-api.git",

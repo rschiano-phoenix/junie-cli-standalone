@@ -12,6 +12,11 @@ Ce document explique l'organisation du code et le rôle de chaque composant du p
 ├── src/                # Code source modulaire
 │   ├── config/         # Configuration et variables d'environnement
 │   ├── services/       # Logique métier isolée par domaine
+│   │   ├── git.service.js
+│   │   ├── github.service.js
+│   │   ├── junie.service.js
+│   │   ├── project.service.js
+│   │   └── trello.service.js
 │   ├── controllers/    # Gestionnaires de requêtes et orchestration
 │   └── app.js          # Configuration de l'application Express
 └── server.js           # Point d'entrée du serveur
@@ -28,6 +33,7 @@ Les services encapsulent la logique métier pour chaque intégration externe :
 - **`project.service.js`** : Charge et gère les fichiers de configuration situés dans le dossier `projects/`. Il permet de retrouver quel projet est concerné par un webhook Trello.
 - **`trello.service.js`** : Gère toute la communication avec l'API Trello (récupérer une carte, la déplacer, ajouter un commentaire) et la vérification de la signature HMAC pour la sécurité.
 - **`git.service.js`** : Responsable des opérations Git. Il nettoie le workspace, clone les dépôts, se place sur la branche de base (`develop` par défaut ou configurée) et crée une branche spécifique pour le ticket Trello. Il gère également le commit et le push automatique des modifications apportées par Junie avant de revenir sur la branche de référence. Les commandes utilisent l'identité configurée dans `.env` (`GIT_USER_NAME`, `GIT_USER_EMAIL`).
+- **`github.service.js`** : Gère les interactions avec l'API GitHub, notamment pour déclencher des workflows GitHub Actions (via `workflow_dispatch`) lors des phases de review.
 - **`junie.service.js`** : Orchestre l'exécution de Junie CLI via des sous-processus. Il capture la sortie pour extraire les métriques de consommation (coût, tokens) de chaque exécution.
 
 ### Mode Dry Run
@@ -37,14 +43,17 @@ Si la variable d'environnement `DRY_RUN` est définie à `true`, le bridge simul
 ### 3. Contrôleurs (`src/controllers/`)
 Les contrôleurs orchestrent les services pour répondre aux requêtes entrantes :
 
-- **`webhook.js`** : Reçoit les webhooks Trello. Il valide la signature, prépare le code source via `GitService`, lance Junie via `JunieService` et met à jour Trello via `TrelloService`.
+- **`webhook.js`** : Reçoit les webhooks Trello. Il valide la signature et orchestre les actions selon le type de webhook :
+    - **Initial/Amélioration** : Prépare le code source via `GitService`, lance Junie via `JunieService` et met à jour Trello via `TrelloService`.
+    - **Review** : Déclenche les workflows GitHub Actions via `GithubService` pour la branche associée au ticket.
+    - **Deployed** : Gère le retour de déploiement pour déplacer la carte vers la liste finale.
 - **`auth.js`** : Gère le flux d'authentification Trello. Il fournit une interface simple pour générer le `TRELLO_TOKEN` nécessaire à l'application.
 
 ### 4. Configuration (`src/config/config.js`)
 Centralise toutes les variables d'environnement (`.env`), charge le token Trello persistant (`.trello_token`) et définit les chemins absolus pour éviter les erreurs de contexte lors de l'exécution (notamment sous Docker).
 
 La règle de placement est la suivante :
-- **Configuration globale** : clés d'intégration et paramètres du serveur (`TRELLO_KEY`, `TRELLO_SECRET`, `TRELLO_CALLBACK_URL`, `JUNIE_API_KEY`, `PORT`, `DRY_RUN`, `SSH_AUTH_SOCK`, `GIT_SSH_COMMAND`, `GIT_COMMAND_TIMEOUT_MS`).
+- **Configuration globale** : clés d'intégration et paramètres du serveur (`TRELLO_KEY`, `TRELLO_SECRET`, `TRELLO_CALLBACK_URL`, `JUNIE_API_KEY`, `GITHUB_TOKEN`, `PORT`, `DRY_RUN`, `SSH_AUTH_SOCK`, `GIT_SSH_COMMAND`, `GIT_COMMAND_TIMEOUT_MS`).
 - **Configuration projet** : listes Trello à surveiller/destination, dépôts Git et éventuelle surcharge `junieApiKey`.
 - **Compatibilité avancée** : les champs Trello `key`, `secret` et `callbackUrl` restent supportés au niveau projet pour gérer plusieurs Power-Ups, mais ils ne sont pas nécessaires dans le cas standard.
 

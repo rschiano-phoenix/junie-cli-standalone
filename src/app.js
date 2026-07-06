@@ -22,6 +22,12 @@ app.get('/webhook/improve', (req, res) => res.send('Trello-Junie Bridge: Improve
 app.head('/webhook/improve', (req, res) => res.sendStatus(200));
 app.post('/webhook/improve', (req, res) => webhookController.handleImprovementWebhook(req, res));
 
+// Review Webhook
+app.get('/webhook/review', (req, res) => res.send('Trello-Junie Bridge: Review webhook endpoint is active.'));
+app.head('/webhook/review', (req, res) => res.sendStatus(200));
+app.post('/webhook/review', (req, res) => webhookController.handleReviewWebhook(req, res));
+app.post('/webhook/review/deployed', (req, res) => webhookController.handleReviewDeployed(req, res));
+
 // Trello Auth Endpoints
 app.get('/auth/trello', (req, res) => authController.renderTrelloAuth(req, res));
 app.get('/auth/trello/callback', (req, res) => authController.renderTrelloCallback(req, res));

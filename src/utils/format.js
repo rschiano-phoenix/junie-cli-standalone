@@ -32,6 +32,9 @@ function getCallbackUrl(baseUrl, type = 'initial') {
     if (type === 'improve') {
         return cleanBase.endsWith('/webhook') ? `${cleanBase}/improve` : `${cleanBase}/webhook/improve`;
     }
+    if (type === 'review') {
+        return cleanBase.endsWith('/webhook') ? `${cleanBase}/review` : `${cleanBase}/webhook/review`;
+    }
     return cleanBase.endsWith('/webhook') ? cleanBase : `${cleanBase}/webhook`;
 }
 

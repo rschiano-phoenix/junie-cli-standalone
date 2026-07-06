@@ -8,6 +8,7 @@ Ce guide explique comment installer et configurer le bridge entre Trello et Juni
 - OU **Node.js 20+** et **Git** installés sur le serveur.
 - Un accès Git valide aux dépôts configurés. Pour les URLs SSH (`git@...`), utilisez une clef SSH chargée dans `ssh-agent` si elle est protégée par mot de passe.
 - Une **Clef API Junie** (récupérable sur [junie.jetbrains.com/cli](https://junie.jetbrains.com/cli)).
+- Un **Personal Access Token GitHub** (pour déclencher les déploiements en review).
 - Des identifiants **Trello** (API Key, Secret) - *Voir section dédiée ci-dessous*.
 
 ---
@@ -46,7 +47,8 @@ Trello a migré la gestion de ses clés API vers le portail des Power-Ups. Voici
    Le bridge peut maintenant identifier les listes par leur nom. Si vous utilisez les noms suivants, aucune configuration d'ID de liste n'est nécessaire (seul le `boardId` est requis dans votre projet) :
    - Cible (déclenche Junie) : **"A développer"**
    - En cours (pendant le travail) : **"En cours"**
-   - Succès (déplacement après Junie) : **"Réalisé"**
+   - Review (déclenche le déploiement) : **"À déployer en review"**
+   - Succès (déplacement après Junie ou Review) : **"Réalisé"** ou **"Déployé"**
    - Échec (déplacement si erreur) : **"Bloqué"**
 
 ---
@@ -75,7 +77,7 @@ C'est la méthode la plus simple car elle inclut toutes les dépendances (Junie 
    ```bash
    cp .docker/.env.example .env
    ```
-   Éditez `.env` avec vos informations globales (`TRELLO_KEY`, `TRELLO_SECRET`, `TRELLO_CALLBACK_URL`, `JUNIE_API_KEY`).
+   Éditez `.env` avec vos informations globales (`TRELLO_KEY`, `TRELLO_SECRET`, `TRELLO_CALLBACK_URL`, `JUNIE_API_KEY`, `GITHUB_TOKEN`).
    
    > **Note sur `TRELLO_CALLBACK_URL`** : Ce n'est pas une valeur fournie par Trello, mais l'URL **publique** de votre serveur bridge. Elle doit impérativement se terminer par `/webhook` (ex: `https://mon-domaine.com/webhook`). Si vous testez localement, utilisez **ngrok** pour obtenir une URL publique.
    Vous pouvez également activer le mode simulation en ajoutant `DRY_RUN=true`.
@@ -170,8 +172,10 @@ Exemple `projects/mon-projet.json` :
     "boardId": "ID_DU_TABLEAU",
     "targetListName": "A développer",
     "improveListName": "A reprendre",
+    "reviewListName": "À déployer en review",
     "inProgressListName": "En cours",
     "doneListName": "Réalisé",
+    "deployedListName": "Déployé",
     "blockedListName": "Bloqué"
   },
   "repos": [
@@ -193,12 +197,54 @@ La configuration Trello est volontairement séparée :
 
 Pour que Trello envoie les événements au bridge, vous devez créer les webhooks (une seule fois par projet).
 
-> **Astuce** : Si vous lancez le bridge avec `DRY_RUN=true`, il affichera automatiquement dans les logs les commandes `curl` exactes à exécuter pour vos webhooks (**Initial** et **Amélioration**).
+> **Astuce** : Si vous lancez le bridge avec `DRY_RUN=true`, il affichera automatiquement dans les logs les commandes `curl` exactes à exécuter pour vos webhooks (**Initial**, **Amélioration** et **Review**).
 
-### Webhook Initial (A développer)
-Utilise le `/webhook` standard. Il se base sur la description de la carte pour la première analyse.
+### Commandes manuelles (Exemples)
 
-### Webhook Amélioration (A reprendre)
-Utilise `/webhook/improve`. Il se base sur le **dernier commentaire** de la carte pour donner ses instructions à Junie, et réutilise la branche `trello/{id}` existante.
+Remplacez `VOTRE_TRELLO_KEY`, `VOTRE_TRELLO_TOKEN`, `ID_DU_TABLEAU` et `https://votre-serveur.com` par vos valeurs réelles.
+
+**1. Webhook Initial (A développer)** :
+```bash
+curl -X POST -H "Content-Type: application/json" \
+  "https://api.trello.com/1/webhooks/?key=VOTRE_TRELLO_KEY&token=VOTRE_TRELLO_TOKEN" \
+  -d '{
+    "description": "Junie Bridge Initial - Mon Projet",
+    "callbackURL": "https://votre-serveur.com/webhook",
+    "idModel": "ID_DU_TABLEAU"
+  }'
+```
+
+**2. Webhook Amélioration (A reprendre)** :
+```bash
+curl -X POST -H "Content-Type: application/json" \
+  "https://api.trello.com/1/webhooks/?key=VOTRE_TRELLO_KEY&token=VOTRE_TRELLO_TOKEN" \
+  -d '{
+    "description": "Junie Bridge Improve - Mon Projet",
+    "callbackURL": "https://votre-serveur.com/webhook/improve",
+    "idModel": "ID_DU_TABLEAU"
+  }'
+```
+
+**3. Webhook Review (À déployer en review)** :
+```bash
+curl -X POST -H "Content-Type: application/json" \
+  "https://api.trello.com/1/webhooks/?key=VOTRE_TRELLO_KEY&token=VOTRE_TRELLO_TOKEN" \
+  -d '{
+    "description": "Junie Bridge Review - Mon Projet",
+    "callbackURL": "https://votre-serveur.com/webhook/review",
+    "idModel": "ID_DU_TABLEAU"
+  }'
+```
+
+### Détails des routes
+
+**Webhook Initial (A développer)** : Utilise le `/webhook` standard. Il se base sur la description de la carte pour la première analyse.
+
+**Webhook Amélioration (A reprendre)** : Utilise `/webhook/improve`. Il se base sur le **dernier commentaire** de la carte pour donner ses instructions à Junie, et réutilise la branche `trello/{id}` existante.
+
+**Webhook Review (À déployer en review)** : Utilise `/webhook/review`. Lorsqu'une carte arrive dans cette liste, le bridge déclenche un workflow GitHub Actions nommé `build_deploy_review.yml` sur la branche `trello/{idShort}` de chaque dépôt configuré.
+Une fois le workflow lancé avec succès, la carte est déplacée dans la liste "Déployé".
+
+> **Note sur le déploiement final** : Le workflow GitHub peut appeler `POST /webhook/review/deployed?project=Nom+Projet&cardId=ID_CARTE` pour confirmer que le déploiement est effectif.
 
 Le bridge validera automatiquement la signature HMAC du webhook lors de la réception des événements.

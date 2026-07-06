@@ -3,6 +3,7 @@ const projectService = require('../services/project.service');
 const trelloService = require('../services/trello.service');
 const gitService = require('../services/git.service');
 const junieService = require('../services/junie.service');
+const githubService = require('../services/github.service');
 const { parseCurrency, parseInteger, getCallbackUrl } = require('../utils/format');
 
 class WebhookController {
@@ -16,6 +17,53 @@ class WebhookController {
 
     async handleImprovementWebhook(req, res) {
         return this.handleCommonWebhook(req, res, 'improve');
+    }
+
+    async handleReviewWebhook(req, res) {
+        return this.handleCommonWebhook(req, res, 'review');
+    }
+
+    async handleReviewDeployed(req, res) {
+        const cardId = req.body?.cardId || req.query?.cardId;
+        const projectName = req.body?.project || req.query?.project;
+        
+        if (!cardId || !projectName) {
+            console.error(`[handleReviewDeployed] Missing cardId (${cardId}) or project (${projectName})`);
+            return res.status(400).send('Missing cardId or project.');
+        }
+
+        const project = projectService.loadProjects().find(p => p.name === projectName);
+        if (!project) {
+            console.error(`[handleReviewDeployed] Project not found: ${projectName}`);
+            return res.status(404).send('Project not found.');
+        }
+
+        const credentials = config.getTrelloCredentials(project);
+        if (!credentials.token) {
+            console.error(`[handleReviewDeployed] No Trello token found for project: ${projectName}`);
+            return res.status(401).send('Trello token missing.');
+        }
+
+        try {
+            let deployedListId = project.trello.deployedListId;
+            if (!deployedListId && (project.trello.deployedListName || project.trello.boardId)) {
+                const name = project.trello.deployedListName || "Déployé";
+                deployedListId = await trelloService.getListIdByName(project.trello.boardId, name, credentials);
+            }
+            
+            if (deployedListId) {
+                await trelloService.moveCard(cardId, deployedListId, credentials);
+                await trelloService.addComment(cardId, `✅ Le déploiement est maintenant terminé ! La carte a été déplacée dans la colonne "Déployé".`, credentials);
+                console.log(`[handleReviewDeployed] Card ${cardId} moved to Deployed for project ${projectName}`);
+                return res.send('Card moved.');
+            } else {
+                console.error(`[handleReviewDeployed] Destination list "Déployé" not found for project ${projectName}`);
+                return res.status(404).send('Destination list not found.');
+            }
+        } catch (err) {
+            console.error(`[handleReviewDeployed Error]`, err.message);
+            return res.status(500).send(err.message);
+        }
     }
 
     async handleCommonWebhook(req, res, type) {
@@ -36,10 +84,14 @@ class WebhookController {
                 return (configTrello.targetListId === listId) || 
                        (configTrello.boardId === boardId && configTrello.targetListName && configTrello.targetListName.toLowerCase() === listName?.toLowerCase()) ||
                        (configTrello.boardId === boardId && !configTrello.targetListId && !configTrello.targetListName && listName?.toLowerCase() === "a développer");
-            } else {
+            } else if (type === 'improve') {
                 return (configTrello.improveListId === listId) || 
                        (configTrello.boardId === boardId && configTrello.improveListName && configTrello.improveListName.toLowerCase() === listName?.toLowerCase()) ||
                        (configTrello.boardId === boardId && !configTrello.improveListId && !configTrello.improveListName && listName?.toLowerCase() === "a reprendre");
+            } else if (type === 'review') {
+                return (configTrello.reviewListId === listId) || 
+                       (configTrello.boardId === boardId && configTrello.reviewListName && configTrello.reviewListName.toLowerCase() === listName?.toLowerCase()) ||
+                       (configTrello.boardId === boardId && !configTrello.reviewListId && !configTrello.reviewListName && listName?.toLowerCase() === "à déployer en review");
             }
         });
 
@@ -49,9 +101,94 @@ class WebhookController {
         }
 
         if (action?.type === 'updateCard') {
-            await this.processCard(req, res, project, type);
+            if (type === 'review') {
+                await this.processReviewCard(req, res, project);
+            } else {
+                await this.processCard(req, res, project, type);
+            }
         } else {
             res.sendStatus(200);
+        }
+    }
+
+    async processReviewCard(req, res, project) {
+        const { action } = req.body;
+        const cardId = action.data.card.id;
+        const projectKey = project.name || project.trello.targetListId || project.trello.targetListName || project.trello.boardId;
+
+        const credentials = config.getTrelloCredentials(project);
+        const callbackUrl = getCallbackUrl(credentials.callbackUrl, 'review');
+
+        if (!credentials.key || !credentials.secret || !callbackUrl) {
+            console.error(`[Webhook] Missing Trello configuration for project: ${projectKey}.`);
+            return res.status(500).send('Trello configuration missing.');
+        }
+
+        if (!trelloService.verifyWebhook(req, credentials.secret, callbackUrl)) {
+            console.error(`[Webhook] Invalid signature for project: ${projectKey} (Type: review)`);
+            return res.status(403).send('Invalid signature');
+        }
+
+        res.sendStatus(200); // Ack Trello early
+
+        try {
+            const card = await trelloService.getCard(cardId, credentials);
+            const branchName = `trello/${card.idShort}`;
+            
+            // Passage en "En cours" pendant le déclenchement
+            let inProgressListId = project.trello.inProgressListId;
+            if (!inProgressListId && (project.trello.inProgressListName || project.trello.boardId)) {
+                const name = project.trello.inProgressListName || "En cours";
+                inProgressListId = await trelloService.getListIdByName(project.trello.boardId, name, credentials);
+            }
+            if (inProgressListId) {
+                await trelloService.moveCard(cardId, inProgressListId, credentials);
+            }
+
+            await trelloService.addComment(cardId, `🚀 Je lance le déploiement en review pour la branche \`${branchName}\` sur GitHub Actions...`, credentials);
+
+            const results = [];
+            for (const repoUrl of (project.repos || [])) {
+                try {
+                    const success = await githubService.triggerReviewWorkflow(repoUrl, branchName);
+                    results.push({ repo: repoUrl, success });
+                } catch (err) {
+                    results.push({ repo: repoUrl, success: false, error: err.message });
+                }
+            }
+
+            const summary = results.map(r => {
+                const repoName = githubService.parseRepoPath(r.repo) || r.repo;
+                return `- **${repoName}** : ${r.success ? '✅ Déploiement lancé' : '❌ Échec (' + (r.error || 'Erreur') + ')'}`;
+            }).join('\n');
+
+            await trelloService.addComment(cardId, `Résultat du lancement des déploiements en review :\n\n${summary}`, credentials);
+
+            const allSuccess = results.length > 0 && results.every(r => r.success);
+
+            if (allSuccess) {
+                let deployedListId = project.trello.deployedListId;
+                if (!deployedListId && (project.trello.deployedListName || project.trello.boardId)) {
+                    const name = project.trello.deployedListName || "Déployé";
+                    deployedListId = await trelloService.getListIdByName(project.trello.boardId, name, credentials);
+                }
+                
+                if (deployedListId) {
+                    await trelloService.moveCard(cardId, deployedListId, credentials);
+                }
+            } else {
+                let failListId = project.trello.blockedListId || project.trello.failListId;
+                if (!failListId && (project.trello.blockedListName || project.trello.failListName || project.trello.boardId)) {
+                    const name = project.trello.blockedListName || project.trello.failListName || "Bloqué";
+                    failListId = await trelloService.getListIdByName(project.trello.boardId, name, credentials);
+                }
+                if (failListId) {
+                    await trelloService.moveCard(cardId, failListId, credentials);
+                }
+            }
+
+        } catch (err) {
+            console.error(`[Webhook Review Error]`, err.message);
         }
     }
 
