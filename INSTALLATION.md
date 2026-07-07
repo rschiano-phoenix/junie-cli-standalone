@@ -59,7 +59,7 @@ Le bridge suit un workflow précis pour chaque ticket :
 0. **Préparation** : À l'initialisation du serveur, tous les projets configurés dans le dossier `projects/` sont clonés dans le dossier `workspace/` pour s'assurer que l'environnement est prêt.
 1. **Trigger** : Vous déplacez une carte dans la colonne **"A développer"**.
 2. **Initialisation** : Le bridge déplace la carte dans **"En cours"** et ajoute un message de bienvenue détaillant le plan d'action.
-3. **Exécution** : Le bridge prépare le code, crée une branche `trello/ID`, et lance Junie CLI. À chaque étape (analyse, modifications), un commentaire est ajouté sur Trello pour vous tenir informé.
+3. **Exécution** : Le bridge prépare le code, crée une branche `trello-ID`, et lance Junie CLI. À chaque étape (analyse, modifications), un commentaire est ajouté sur Trello pour vous tenir informé.
 4. **Synchronisation** : Si Junie réussit, les changements sont automatiquement commités et poussés sur le dépôt distant. Le dépôt local repasse ensuite sur la branche `develop`.
 5. **Finalisation** :
    - Si succès : La carte est déplacée dans **"Réalisé"** avec un rapport détaillé incluant la consommation totale (coût et tokens).
@@ -240,9 +240,9 @@ curl -X POST -H "Content-Type: application/json" \
 
 **Webhook Initial (A développer)** : Utilise le `/webhook` standard. Il se base sur la description de la carte pour la première analyse.
 
-**Webhook Amélioration (A reprendre)** : Utilise `/webhook/improve`. Il se base sur le **dernier commentaire** de la carte pour donner ses instructions à Junie, et réutilise la branche `trello/{id}` existante.
+**Webhook Amélioration (A reprendre)** : Utilise `/webhook/improve`. Il se base sur le **dernier commentaire** de la carte pour donner ses instructions à Junie, et réutilise la branche `trello-{id}` existante.
 
-**Webhook Review (À déployer en review)** : Utilise `/webhook/review`. Lorsqu'une carte arrive dans cette liste, le bridge déclenche un workflow GitHub Actions nommé `build_deploy_review.yml` sur la branche `trello/{idShort}` de chaque dépôt configuré.
+**Webhook Review (À déployer en review)** : Utilise `/webhook/review`. Lorsqu'une carte arrive dans cette liste, le bridge déclenche un workflow GitHub Actions nommé `build_deploy_review.yml` sur la branche `trello-{idShort}` de chaque dépôt configuré.
 Une fois le workflow lancé avec succès, la carte est déplacée dans la liste "Déployé".
 
 > **Note sur le déploiement final** : Le workflow GitHub peut appeler `POST /webhook/review/deployed?project=Nom+Projet&cardId=ID_CARTE` pour confirmer que le déploiement est effectif.

@@ -4,7 +4,7 @@ const trelloService = require('../services/trello.service');
 const gitService = require('../services/git.service');
 const junieService = require('../services/junie.service');
 const githubService = require('../services/github.service');
-const { parseCurrency, parseInteger, getCallbackUrl } = require('../utils/format');
+const { parseCurrency, parseInteger, getCallbackUrl, sleep } = require('../utils/format');
 
 class WebhookController {
     constructor() {
@@ -133,7 +133,7 @@ class WebhookController {
 
         try {
             const card = await trelloService.getCard(cardId, credentials);
-            const branchName = `trello/${card.idShort}`;
+            const branchName = `trello-${card.idShort}`;
             
             await trelloService.addComment(cardId, `🚀 Je lance le déploiement en review pour la branche \`${branchName}\` sur GitHub Actions...`, credentials);
 
@@ -157,20 +157,79 @@ class WebhookController {
             const allSuccess = results.length > 0 && results.every(r => r.success);
 
             if (allSuccess) {
+                // Au lieu de déplacer immédiatement, on lance le suivi par polling
+                this.monitorReviewDeployments(cardId, project, results.filter(r => r.success).map(r => r.repo), branchName, credentials);
+            }
+
+        } catch (err) {
+            console.error(`[Webhook Review Error]`, err.message);
+        }
+    }
+
+    async monitorReviewDeployments(cardId, project, repoUrls, branchName, credentials) {
+        console.log(`[Polling] Démarrage du suivi des déploiements pour la carte ${cardId} (${branchName})`);
+        
+        try {
+            // 1. Attendre un peu que GitHub enregistre les runs
+            await sleep(10000);
+
+            const repoResults = [];
+            const pollingTasks = repoUrls.map(async (repoUrl) => {
+                const repoPath = githubService.parseRepoPath(repoUrl);
+                const repoName = repoPath || repoUrl;
+
+                // Trouver le run
+                const run = await githubService.getLatestWorkflowRun(repoPath, branchName);
+                if (!run) {
+                    console.error(`[Polling] Impossible de trouver un run pour ${repoPath} sur ${branchName}`);
+                    repoResults.push({ repo: repoName, status: 'not_found' });
+                    return;
+                }
+
+                console.log(`[Polling] Suivi du run ${run.id} pour ${repoPath}`);
+                const conclusion = await githubService.pollWorkflowStatus(repoPath, run.id);
+                repoResults.push({ repo: repoName, status: conclusion, url: run.html_url });
+            });
+
+            await Promise.all(pollingTasks);
+
+            // 2. Analyser les résultats globaux
+            const allSuccess = repoResults.length > 0 && repoResults.every(r => r.status === 'success');
+            const summary = repoResults.map(r => {
+                let icon = '❓';
+                if (r.status === 'success') icon = '✅';
+                else if (r.status === 'failure') icon = '❌';
+                else if (r.status === 'timed_out') icon = '⏳';
+                
+                return `- **${r.repo}** : ${icon} ${r.status}${r.url ? ` ([logs](${r.url}))` : ''}`;
+            }).join('\n');
+
+            if (allSuccess) {
                 let deployedListId = project.trello.deployedListId;
                 if (!deployedListId && (project.trello.deployedListName || project.trello.boardId)) {
                     const name = project.trello.deployedListName || "Déployé";
                     deployedListId = await trelloService.getListIdByName(project.trello.boardId, name, credentials);
                 }
-                
+
                 if (deployedListId) {
                     await trelloService.moveCard(cardId, deployedListId, credentials);
-                    await trelloService.addComment(cardId, `✅ Toutes les reviews ont été lancées avec succès !`, credentials);
+                    await trelloService.addComment(cardId, `✅ Déploiement réussi sur tous les dépôts !\n\n${summary}`, credentials);
                 }
+            } else {
+                let blockedListId = project.trello.blockedListId || project.trello.improveListId;
+                if (!blockedListId && project.trello.boardId) {
+                    blockedListId = await trelloService.getListIdByName(project.trello.boardId, "Bloqué", credentials);
+                }
+
+                if (blockedListId) {
+                    await trelloService.moveCard(cardId, blockedListId, credentials);
+                }
+                await trelloService.addComment(cardId, `⚠️ Le déploiement n'a pas totalement réussi.\n\n${summary}\n\nLa carte a été déplacée pour vérification.`, credentials);
             }
 
         } catch (err) {
-            console.error(`[Webhook Review Error]`, err.message);
+            console.error(`[Polling Error]`, err.message);
+            await trelloService.addComment(cardId, `❌ Erreur lors du suivi du déploiement : ${err.message}`, credentials);
         }
     }
 
@@ -235,7 +294,7 @@ class WebhookController {
 
 Voici mon plan d'action pour aujourd'hui :
 1. Préparer un espace de travail tout propre.
-2. Récupérer ou créer la branche dédiée \`trello/${card.idShort}\` sur chaque dépôt.
+2. Récupérer ou créer la branche dédiée \`trello-${card.idShort}\` sur chaque dépôt.
 3. Laisser Junie opérer sa magie sur :
 ${reposText}
 4. Vous faire un rapport complet dès que j'ai fini.
@@ -243,7 +302,7 @@ ${reposText}
 Je commence tout de suite ! 🚀`;
             await trelloService.addComment(cardId, planComment, credentials);
 
-            const branchName = `trello/${card.idShort}`;
+            const branchName = `trello-${card.idShort}`;
             const baseBranch = project.baseBranch || 'develop';
             const apiKey = config.getJunieApiKey(project);
 

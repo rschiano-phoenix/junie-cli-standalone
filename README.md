@@ -5,7 +5,7 @@ Ce projet est un service Node.js autonome qui fait le pont entre les tickets Tre
 ## Fonctionnalités Clés
 
 - **Multi-projets** : Gérez plusieurs projets Trello et dépôts Git depuis une seule instance.
-- **Workflow Git Automatisé** : Clonage automatique, passage sur `develop`, et création de branches dédiées (`trello/ticket-ID`).
+- **Workflow Git Automatisé** : Clonage automatique, passage sur `develop`, et création de branches dédiées (`trello-ticket-ID`).
 - **Déploiement en Review** : Déclenchement automatique de GitHub Actions pour déployer des environnements de review.
 - **Isolation via Workspace** : Chaque tâche s'exécute dans un environnement propre et nettoyé automatiquement.
 - **Reporting Trello** : Rapport automatique de consommation (coût/tokens) posté en commentaire du ticket une fois terminé.

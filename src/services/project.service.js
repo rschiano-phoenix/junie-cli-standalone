@@ -86,7 +86,7 @@ class ProjectService {
             
             for (const repoUrl of (project.repos || [])) {
                 // Pour l'initialisation, on se contente de préparer le repo sur la branche de base
-                // On utilise setupRepo avec branchName = baseBranch pour éviter de créer une branche trello/xxx inutile
+                // On utilise setupRepo avec branchName = baseBranch pour éviter de créer une branche trello-xxx inutile
                 await gitService.setupRepo(repoUrl, projectWorkspace, baseBranch, baseBranch);
             }
         }

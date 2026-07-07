@@ -38,10 +38,15 @@ function getCallbackUrl(baseUrl, type = 'initial') {
     return cleanBase.endsWith('/webhook') ? cleanBase : `${cleanBase}/webhook`;
 }
 
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 module.exports = {
     maskSecret,
     parseCurrency,
     parseInteger,
     sanitizeName,
-    getCallbackUrl
+    getCallbackUrl,
+    sleep
 };
