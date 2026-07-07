@@ -135,16 +135,6 @@ class WebhookController {
             const card = await trelloService.getCard(cardId, credentials);
             const branchName = `trello/${card.idShort}`;
             
-            // Passage en "En cours" pendant le déclenchement
-            let inProgressListId = project.trello.inProgressListId;
-            if (!inProgressListId && (project.trello.inProgressListName || project.trello.boardId)) {
-                const name = project.trello.inProgressListName || "En cours";
-                inProgressListId = await trelloService.getListIdByName(project.trello.boardId, name, credentials);
-            }
-            if (inProgressListId) {
-                await trelloService.moveCard(cardId, inProgressListId, credentials);
-            }
-
             await trelloService.addComment(cardId, `🚀 Je lance le déploiement en review pour la branche \`${branchName}\` sur GitHub Actions...`, credentials);
 
             const results = [];
@@ -175,15 +165,7 @@ class WebhookController {
                 
                 if (deployedListId) {
                     await trelloService.moveCard(cardId, deployedListId, credentials);
-                }
-            } else {
-                let failListId = project.trello.blockedListId || project.trello.failListId;
-                if (!failListId && (project.trello.blockedListName || project.trello.failListName || project.trello.boardId)) {
-                    const name = project.trello.blockedListName || project.trello.failListName || "Bloqué";
-                    failListId = await trelloService.getListIdByName(project.trello.boardId, name, credentials);
-                }
-                if (failListId) {
-                    await trelloService.moveCard(cardId, failListId, credentials);
+                    await trelloService.addComment(cardId, `✅ Toutes les reviews ont été lancées avec succès !`, credentials);
                 }
             }
 
