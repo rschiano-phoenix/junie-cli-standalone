@@ -21,28 +21,44 @@ class GithubService {
         
         console.log(`[GitHub] Déclenchement du workflow de review pour ${repoPath} sur la branche ${branchName}`);
         
-        if (config.DRY_RUN) {
-            console.log(`[GitHub] [DRY RUN] Appel POST vers ${url} avec ref: ${branchName} et inputs: { installer: 'Oui' }`);
-            return true;
-        }
+        const trigger = async (withInputs = true) => {
+            const payload = { ref: branchName };
+            if (withInputs) {
+                payload.inputs = { installer: 'Oui' };
+            }
 
-        try {
-            const response = await axios.post(url, {
-                ref: branchName,
-                inputs: {
-                    installer: 'Oui'
-                }
-            }, {
+            if (config.DRY_RUN) {
+                console.log(`[GitHub] [DRY RUN] Appel POST vers ${url} avec ref: ${branchName}${withInputs ? ' et inputs: { installer: \'Oui\' }' : ''}`);
+                return true;
+            }
+
+            const response = await axios.post(url, payload, {
                 headers: {
                     'Accept': 'application/vnd.github+json',
                     'Authorization': `Bearer ${token}`,
                     'X-GitHub-Api-Version': '2022-11-28'
                 }
             });
-            // GitHub dispatches return 204 No Content on success
             return response.status === 204;
+        };
+
+        try {
+            return await trigger(true);
         } catch (error) {
-            console.error(`[GitHub Error] Échec du déclenchement du workflow : ${error.message}`);
+            // Si l'erreur est 422 et indique que l'input est inattendu, on réessaie sans inputs
+            if (error.response && error.response.status === 422 && 
+                error.response.data && error.response.data.message && 
+                error.response.data.message.includes('Unexpected inputs provided')) {
+                
+                console.warn(`[GitHub] Le workflow pour ${repoPath} ne semble pas accepter l'input 'installer'. Nouvel essai sans inputs...`);
+                try {
+                    return await trigger(false);
+                } catch (retryError) {
+                    error = retryError;
+                }
+            }
+
+            console.error(`[GitHub Error] Échec du déclenchement du workflow pour ${repoPath} : ${error.message}`);
             if (error.response) {
                 console.error(`[GitHub Error] Statut : ${error.response.status}, Données : ${JSON.stringify(error.response.data)}`);
             }
