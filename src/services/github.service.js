@@ -22,13 +22,16 @@ class GithubService {
         console.log(`[GitHub] Déclenchement du workflow de review pour ${repoPath} sur la branche ${branchName}`);
         
         if (config.DRY_RUN) {
-            console.log(`[GitHub] [DRY RUN] Appel POST vers ${url} avec ref: ${branchName}`);
+            console.log(`[GitHub] [DRY RUN] Appel POST vers ${url} avec ref: ${branchName} et inputs: { installer: 'Oui' }`);
             return true;
         }
 
         try {
             const response = await axios.post(url, {
-                ref: branchName
+                ref: branchName,
+                inputs: {
+                    installer: 'Oui'
+                }
             }, {
                 headers: {
                     'Accept': 'application/vnd.github+json',
