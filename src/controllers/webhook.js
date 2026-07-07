@@ -4,6 +4,7 @@ const trelloService = require('../services/trello.service');
 const gitService = require('../services/git.service');
 const junieService = require('../services/junie.service');
 const githubService = require('../services/github.service');
+const dbService = require('../services/db.service');
 const { parseCurrency, parseInteger, getCallbackUrl, sleep } = require('../utils/format');
 
 class WebhookController {
@@ -45,6 +46,9 @@ class WebhookController {
         }
 
         try {
+            const card = await trelloService.getCard(cardId, credentials);
+            const branchName = `trello-${card.idShort}`;
+
             let deployedListId = project.trello.deployedListId;
             if (!deployedListId && (project.trello.deployedListName || project.trello.boardId)) {
                 const name = project.trello.deployedListName || "Déployé";
@@ -54,6 +58,19 @@ class WebhookController {
             if (deployedListId) {
                 await trelloService.moveCard(cardId, deployedListId, credentials);
                 await trelloService.addComment(cardId, `✅ Le déploiement est maintenant terminé ! La carte a été déplacée dans la colonne "Déployé".`, credentials);
+
+                // Synchronisation de la base de données si configurée
+                if (project.environments?.source && project.environments?.target) {
+                    await trelloService.addComment(cardId, `🔄 Lancement de la synchronisation de la base de données (source -> target)...`, credentials);
+                    try {
+                        await dbService.sync(project, branchName);
+                        await trelloService.addComment(cardId, `✅ Synchronisation de la base de données terminée !`, credentials);
+                    } catch (syncErr) {
+                        console.error(`[DB Sync Error]`, syncErr.message);
+                        await trelloService.addComment(cardId, `⚠️ Échec de la synchronisation de la base de données : ${syncErr.message}`, credentials);
+                    }
+                }
+
                 console.log(`[handleReviewDeployed] Card ${cardId} moved to Deployed for project ${projectName}`);
                 return res.send('Card moved.');
             } else {
@@ -214,6 +231,18 @@ class WebhookController {
                 if (deployedListId) {
                     await trelloService.moveCard(cardId, deployedListId, credentials);
                     await trelloService.addComment(cardId, `✅ Déploiement réussi sur tous les dépôts !\n\n${summary}`, credentials);
+
+                    // Synchronisation de la base de données si configurée
+                    if (project.environments?.source && project.environments?.target) {
+                        await trelloService.addComment(cardId, `🔄 Lancement de la synchronisation de la base de données (source -> target)...`, credentials);
+                        try {
+                            await dbService.sync(project, branchName);
+                            await trelloService.addComment(cardId, `✅ Synchronisation de la base de données terminée !`, credentials);
+                        } catch (syncErr) {
+                            console.error(`[DB Sync Error]`, syncErr.message);
+                            await trelloService.addComment(cardId, `⚠️ Échec de la synchronisation de la base de données : ${syncErr.message}`, credentials);
+                        }
+                    }
                 }
             } else {
                 let blockedListId = project.trello.blockedListId || project.trello.improveListId;
