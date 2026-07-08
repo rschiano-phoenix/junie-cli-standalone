@@ -94,8 +94,8 @@ class GithubService {
     async pollWorkflowStatus(repoPath, runId, onUpdate) {
         const token = config.GITHUB.TOKEN;
         const url = `https://api.github.com/repos/${repoPath}/actions/runs/${runId}`;
-        const maxAttempts = 60; // 60 essais * 10s = 10 minutes max
-        const interval = 10000; // 10 secondes
+        const maxAttempts = 60; // 60 essais * 30s = 30 minutes max
+        const interval = 30000; // 30 secondes
 
         let attempts = 0;
         while (attempts < maxAttempts) {
