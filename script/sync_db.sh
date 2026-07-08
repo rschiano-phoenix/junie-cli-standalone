@@ -19,6 +19,19 @@ TO_DB_USER_FALLBACK=${14}
 TO_DB_PASSWORD_FALLBACK=${15}
 BRANCH_NAME=${16}
 
+# Configuration SSH pour éviter les demandes de mot de passe (comme pour Git)
+SSH_COMMAND_VAL=${GIT_SSH_COMMAND:-$SSH_COMMAND}
+SSH_CMD="ssh"
+SCP_CMD="scp"
+
+if [[ -n "$SSH_COMMAND_VAL" ]]; then
+  SSH_CMD="$SSH_COMMAND_VAL"
+  # Pour SCP, on essaie de remplacer 'ssh' par 'scp' dans la commande pour garder les options (-i, etc.)
+  if [[ "$SSH_COMMAND_VAL" =~ ^(.*)ssh([[:space:]]+.*)$ ]]; then
+    SCP_CMD="${BASH_REMATCH[1]}scp${BASH_REMATCH[2]}"
+  fi
+fi
+
 if [[ -z "$PROJECT_NAME" ]]; then
   echo "❌ Paramètres manquants. Usage: $0 <project_name> <from_host> <from_user> <from_prefix> <from_db_host> <from_db_name> <from_db_user> <from_db_pass> <to_host> <to_user> <to_prefix> <to_db_host> <to_db_name> <to_db_user> <to_db_pass> [branch_name]"
   exit 1
@@ -36,7 +49,7 @@ run_cmd() {
   if [[ -z "$host" || -z "$ssh_user" ]]; then
     bash -c "$cmd"
   else
-    ssh "$ssh_user@$host" "$cmd"
+    $SSH_CMD "$ssh_user@$host" "$cmd"
   fi
 }
 
@@ -149,7 +162,7 @@ run_cmd "$FROM_SSH_USER" "$FROM_HOST" \
 
 if [[ "$FROM_HOST" != "$TO_HOST" ]]; then
   rm -f "$GZIP_FILENAME"
-  scp "$FROM_SSH_USER@$FROM_HOST:$GZIP_FILENAME" "$GZIP_FILENAME"
+  $SCP_CMD "$FROM_SSH_USER@$FROM_HOST:$GZIP_FILENAME" "$GZIP_FILENAME"
   run_cmd "$FROM_SSH_USER" "$FROM_HOST" \
     "rm -f $GZIP_FILENAME"
 fi
@@ -158,7 +171,7 @@ fi
 if [[ "$FROM_HOST" != "$TO_HOST" ]]; then
   if [[ -n "$TO_HOST" && -n "$TO_SSH_USER" ]]; then
     echo "📤 Transfert du dump vers $TO_HOST..."
-    scp "$GZIP_FILENAME" "$TO_SSH_USER@$TO_HOST:$GZIP_FILENAME"
+    $SCP_CMD "$GZIP_FILENAME" "$TO_SSH_USER@$TO_HOST:$GZIP_FILENAME"
     rm -f "$GZIP_FILENAME"
   fi
 fi
