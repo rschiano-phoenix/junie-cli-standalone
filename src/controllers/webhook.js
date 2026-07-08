@@ -5,11 +5,23 @@ const gitService = require('../services/git.service');
 const junieService = require('../services/junie.service');
 const githubService = require('../services/github.service');
 const dbService = require('../services/db.service');
-const { parseCurrency, parseInteger, getCallbackUrl, sleep } = require('../utils/format');
+const { parseCurrency, parseInteger, getCallbackUrl, sleep, sanitizeName } = require('../utils/format');
 
 class WebhookController {
     constructor() {
         this.activeProjects = new Set();
+    }
+
+    getBranchName(card) {
+        if (card.labels && card.labels.length > 0) {
+            const customLabel = card.labels.find(label => label.name && !label.name.startsWith('ENGINE-'));
+            if (customLabel) {
+                const labelName = customLabel.name;
+                const branchName = labelName.startsWith('trello-') ? labelName : `trello-${labelName}`;
+                return sanitizeName(branchName);
+            }
+        }
+        return `trello-${card.idShort}`;
     }
 
     async handleWebhook(req, res) {
@@ -47,7 +59,7 @@ class WebhookController {
 
         try {
             const card = await trelloService.getCard(cardId, credentials);
-            const branchName = `trello-${card.idShort}`;
+            const branchName = this.getBranchName(card);
 
             let deployedListId = project.trello.deployedListId;
             if (!deployedListId && (project.trello.deployedListName || project.trello.boardId)) {
@@ -56,9 +68,6 @@ class WebhookController {
             }
             
             if (deployedListId) {
-                await trelloService.moveCard(cardId, deployedListId, credentials);
-                await trelloService.addComment(cardId, `✅ Le déploiement est maintenant terminé ! La carte a été déplacée dans la colonne "Déployé".`, credentials);
-
                 // Synchronisation de la base de données si configurée
                 if (project.environments?.source && project.environments?.target) {
                     await trelloService.addComment(cardId, `🔄 Lancement de la synchronisation de la base de données (source -> target)...`, credentials);
@@ -67,9 +76,13 @@ class WebhookController {
                         await trelloService.addComment(cardId, `✅ Synchronisation de la base de données terminée !`, credentials);
                     } catch (syncErr) {
                         console.error(`[DB Sync Error]`, syncErr.message);
-                        await trelloService.addComment(cardId, `⚠️ Échec de la synchronisation de la base de données : ${syncErr.message}`, credentials);
+                        await trelloService.addComment(cardId, `⚠️ Échec de la synchronisation de la base de données : ${syncErr.message}\n\nLa carte ne sera pas déplacée dans "Déployé".`, credentials);
+                        return res.status(500).send(`Database synchronization failed. Card not moved.`);
                     }
                 }
+
+                await trelloService.moveCard(cardId, deployedListId, credentials);
+                await trelloService.addComment(cardId, `✅ Le déploiement est maintenant terminé ! La carte a été déplacée dans la colonne "Déployé".`, credentials);
 
                 console.log(`[handleReviewDeployed] Card ${cardId} moved to Deployed for project ${projectName}`);
                 return res.send('Card moved.');
@@ -150,7 +163,7 @@ class WebhookController {
 
         try {
             const card = await trelloService.getCard(cardId, credentials);
-            const branchName = `trello-${card.idShort}`;
+            const branchName = this.getBranchName(card);
             
             await trelloService.addComment(cardId, `🚀 Je lance le déploiement en review pour la branche \`${branchName}\` sur GitHub Actions...`, credentials);
 
@@ -229,9 +242,6 @@ class WebhookController {
                 }
 
                 if (deployedListId) {
-                    await trelloService.moveCard(cardId, deployedListId, credentials);
-                    await trelloService.addComment(cardId, `✅ Déploiement réussi sur tous les dépôts !\n\n${summary}`, credentials);
-
                     // Synchronisation de la base de données si configurée
                     if (project.environments?.source && project.environments?.target) {
                         await trelloService.addComment(cardId, `🔄 Lancement de la synchronisation de la base de données (source -> target)...`, credentials);
@@ -240,9 +250,14 @@ class WebhookController {
                             await trelloService.addComment(cardId, `✅ Synchronisation de la base de données terminée !`, credentials);
                         } catch (syncErr) {
                             console.error(`[DB Sync Error]`, syncErr.message);
-                            await trelloService.addComment(cardId, `⚠️ Échec de la synchronisation de la base de données : ${syncErr.message}`, credentials);
+                            await trelloService.addComment(cardId, `⚠️ Échec de la synchronisation de la base de données : ${syncErr.message}\n\nLa carte ne sera pas déplacée dans "Déployé".`, credentials);
+                            // On ne déplace pas la carte si la synchro échoue
+                            return;
                         }
                     }
+
+                    await trelloService.moveCard(cardId, deployedListId, credentials);
+                    await trelloService.addComment(cardId, `✅ Déploiement réussi sur tous les dépôts !\n\n${summary}`, credentials);
                 }
             } else {
                 let blockedListId = project.trello.blockedListId || project.trello.improveListId;
@@ -317,13 +332,14 @@ class WebhookController {
             }
 
             // Add plan comment
+            const branchName = this.getBranchName(card);
             const reposText = (project.repos || []).map(r => `- ${r}`).join('\n');
             const introMsg = type === 'improve' ? "Je vais appliquer les modifications demandées !" : "Je m'occupe de ce ticket.";
             const planComment = `👋 Bonjour ! ${introMsg}
 
 Voici mon plan d'action pour aujourd'hui :
 1. Préparer un espace de travail tout propre.
-2. Récupérer ou créer la branche dédiée \`trello-${card.idShort}\` sur chaque dépôt.
+2. Récupérer ou créer la branche dédiée \`${branchName}\` sur chaque dépôt.
 3. Laisser Junie opérer sa magie sur :
 ${reposText}
 4. Vous faire un rapport complet dès que j'ai fini.
@@ -331,7 +347,6 @@ ${reposText}
 Je commence tout de suite ! 🚀`;
             await trelloService.addComment(cardId, planComment, credentials);
 
-            const branchName = `trello-${card.idShort}`;
             const baseBranch = project.baseBranch || 'develop';
             const apiKey = config.getJunieApiKey(project);
 
