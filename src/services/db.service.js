@@ -63,10 +63,10 @@ class DBService {
 
             child.on('close', (code) => {
                 if (code === 0) {
-                    console.log(`[DB] Sync completed successfully for ${projectName}`);
+                    console.log(`[DB] Sync completed successfully for ${project.name}`);
                     resolve({ success: true, stdout });
                 } else {
-                    console.error(`[DB] Sync failed for ${projectName} with code ${code}`);
+                    console.error(`[DB] Sync failed for ${project.name} with code ${code}`);
                     reject(new Error(`sync_db.sh failed with code ${code}\n${stderr}`));
                 }
             });
