@@ -6,6 +6,34 @@ const { maskSecret } = require('../utils/format');
 const MAX_CAPTURED_OUTPUT_LENGTH = 100000;
 
 class JunieService {
+    async getBalance(repoPath, apiKey) {
+        return new Promise((resolve) => {
+            const junie = spawn('junie', ['--auth', apiKey, '--brave', '/usage'], {
+                cwd: repoPath,
+                env: { ...process.env, JUNIE_API_KEY: apiKey },
+                timeout: 30000, // 30 secondes suffisent pour /usage
+            });
+
+            let output = '';
+            junie.stdout.on('data', d => { output += d.toString(); });
+            junie.stderr.on('data', d => { output += d.toString(); });
+
+            junie.on('close', (code) => {
+                const balanceMatch = output.match(/Balance left[:\s]+\$?([\d,.]+)/i);
+                if (balanceMatch) {
+                    const balance = parseFloat(balanceMatch[1].replace(',', '.'));
+                    resolve(balance);
+                } else {
+                    resolve(null);
+                }
+            });
+
+            junie.on('error', () => {
+                resolve(null);
+            });
+        });
+    }
+
     async run(repoPath, instruction, apiKey) {
         if (config.DRY_RUN) {
             const timestamp = new Date().toISOString();
@@ -19,7 +47,10 @@ class JunieService {
                 repo: path.basename(repoPath)
             };
         }
-        return new Promise((resolve) => {
+
+        const balanceBefore = await this.getBalance(repoPath, apiKey);
+
+        const result = await new Promise((resolve) => {
             const timestamp = new Date().toISOString();
             console.log(`[${timestamp}] Starting Junie in: ${repoPath}`);
 
@@ -74,6 +105,19 @@ class JunieService {
                 });
             });
         });
+
+        const balanceAfter = await this.getBalance(repoPath, apiKey);
+
+        if (balanceBefore !== null && balanceAfter !== null) {
+            const diff = balanceBefore - balanceAfter;
+            // On s'assure que la différence est positive (en cas de recharge ou erreur de lecture)
+            if (diff >= 0) {
+                result.cost = `$${diff.toFixed(2)}`;
+                console.log(`[Junie] Cost calculated from balance difference: ${result.cost} (Before: $${balanceBefore.toFixed(2)}, After: $${balanceAfter.toFixed(2)})`);
+            }
+        }
+
+        return result;
     }
 }
 
