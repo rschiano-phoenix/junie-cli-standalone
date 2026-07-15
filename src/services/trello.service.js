@@ -55,6 +55,16 @@ class TrelloService {
         });
     }
 
+    async addLabel(cardId, labelName, credentials) {
+        if (config.DRY_RUN) {
+            console.log(`[Trello] [DRY RUN] Would add label "${labelName}" to card ${cardId}`);
+            return { status: 200, data: {} };
+        }
+        return axios.post(`https://api.trello.com/1/cards/${encodeURIComponent(cardId)}/labels`, { name: labelName }, {
+            params: this.buildAuthParams(credentials),
+        });
+    }
+
     async getCardComments(cardId, credentials) {
         const response = await axios.get(`https://api.trello.com/1/cards/${encodeURIComponent(cardId)}/actions`, {
             params: {

@@ -14,7 +14,7 @@ class WebhookController {
 
     getBranchName(card) {
         if (card.labels && card.labels.length > 0) {
-            const customLabel = card.labels.find(label => label.name && !label.name.startsWith('ENGINE-'));
+            const customLabel = card.labels.find(label => label.name && !label.name.startsWith('ENGINE-') && label.name !== 'EN REVIEW');
             if (customLabel) {
                 const labelName = customLabel.name;
                 const branchName = labelName.startsWith('trello-') ? labelName : `trello-${labelName}`;
@@ -60,6 +60,7 @@ class WebhookController {
         try {
             const card = await trelloService.getCard(cardId, credentials);
             const branchName = this.getBranchName(card);
+            const hasEnReviewTag = card.labels && card.labels.some(label => label.name === 'EN REVIEW');
 
             let deployedListId = project.trello.deployedListId;
             if (!deployedListId && (project.trello.deployedListName || project.trello.boardId)) {
@@ -70,18 +71,27 @@ class WebhookController {
             if (deployedListId) {
                 // Synchronisation de la base de données si configurée
                 if (project.environments?.source && project.environments?.target) {
-                    await trelloService.addComment(cardId, `🔄 Lancement de la synchronisation de la base de données (source -> target)...`, credentials);
-                    try {
-                        await dbService.sync(project, branchName);
-                        await trelloService.addComment(cardId, `✅ Synchronisation de la base de données terminée !`, credentials);
-                    } catch (syncErr) {
-                        console.error(`[DB Sync Error]`, syncErr.message);
-                        await trelloService.addComment(cardId, `⚠️ Échec de la synchronisation de la base de données : ${syncErr.message}\n\nLa carte ne sera pas déplacée dans "Déployé".`, credentials);
-                        return res.status(500).send(`Database synchronization failed. Card not moved.`);
+                    if (hasEnReviewTag) {
+                        await trelloService.addComment(cardId, `ℹ️ Le ticket est déjà marqué "EN REVIEW", la synchronisation de la base de données est ignorée pour préserver les données de test.`, credentials);
+                    } else {
+                        await trelloService.addComment(cardId, `🔄 Lancement de la synchronisation de la base de données (source -> target)...`, credentials);
+                        try {
+                            await dbService.sync(project, branchName);
+                            await trelloService.addComment(cardId, `✅ Synchronisation de la base de données terminée !`, credentials);
+                        } catch (syncErr) {
+                            console.error(`[DB Sync Error]`, syncErr.message);
+                            await trelloService.addComment(cardId, `⚠️ Échec de la synchronisation de la base de données : ${syncErr.message}\n\nLa carte ne sera pas déplacée dans "Déployé".`, credentials);
+                            return res.status(500).send(`Database synchronization failed. Card not moved.`);
+                        }
                     }
                 }
 
                 await trelloService.moveCard(cardId, deployedListId, credentials);
+                
+                if (!hasEnReviewTag) {
+                    await trelloService.addLabel(cardId, 'EN REVIEW', credentials);
+                }
+
                 await trelloService.addComment(cardId, `✅ Le déploiement est maintenant terminé ! La carte a été déplacée dans la colonne "Déployé".`, credentials);
 
                 console.log(`[handleReviewDeployed] Card ${cardId} moved to Deployed for project ${projectName}`);
@@ -235,6 +245,9 @@ class WebhookController {
             }).join('\n');
 
             if (allSuccess) {
+                const card = await trelloService.getCard(cardId, credentials);
+                const hasEnReviewTag = card.labels && card.labels.some(label => label.name === 'EN REVIEW');
+
                 let deployedListId = project.trello.deployedListId;
                 if (!deployedListId && (project.trello.deployedListName || project.trello.boardId)) {
                     const name = project.trello.deployedListName || "Déployé";
@@ -244,19 +257,28 @@ class WebhookController {
                 if (deployedListId) {
                     // Synchronisation de la base de données si configurée
                     if (project.environments?.source && project.environments?.target) {
-                        await trelloService.addComment(cardId, `🔄 Lancement de la synchronisation de la base de données (source -> target)...`, credentials);
-                        try {
-                            await dbService.sync(project, branchName);
-                            await trelloService.addComment(cardId, `✅ Synchronisation de la base de données terminée !`, credentials);
-                        } catch (syncErr) {
-                            console.error(`[DB Sync Error]`, syncErr.message);
-                            await trelloService.addComment(cardId, `⚠️ Échec de la synchronisation de la base de données : ${syncErr.message}\n\nLa carte ne sera pas déplacée dans "Déployé".`, credentials);
-                            // On ne déplace pas la carte si la synchro échoue
-                            return;
+                        if (hasEnReviewTag) {
+                            await trelloService.addComment(cardId, `ℹ️ Le ticket est déjà marqué "EN REVIEW", la synchronisation de la base de données est ignorée pour préserver les données de test.`, credentials);
+                        } else {
+                            await trelloService.addComment(cardId, `🔄 Lancement de la synchronisation de la base de données (source -> target)...`, credentials);
+                            try {
+                                await dbService.sync(project, branchName);
+                                await trelloService.addComment(cardId, `✅ Synchronisation de la base de données terminée !`, credentials);
+                            } catch (syncErr) {
+                                console.error(`[DB Sync Error]`, syncErr.message);
+                                await trelloService.addComment(cardId, `⚠️ Échec de la synchronisation de la base de données : ${syncErr.message}\n\nLa carte ne sera pas déplacée dans "Déployé".`, credentials);
+                                // On ne déplace pas la carte si la synchro échoue
+                                return;
+                            }
                         }
                     }
 
                     await trelloService.moveCard(cardId, deployedListId, credentials);
+                    
+                    if (!hasEnReviewTag) {
+                        await trelloService.addLabel(cardId, 'EN REVIEW', credentials);
+                    }
+
                     await trelloService.addComment(cardId, `✅ Déploiement réussi sur tous les dépôts !\n\n${summary}`, credentials);
                 }
             } else {
