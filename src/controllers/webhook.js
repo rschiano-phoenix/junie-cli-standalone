@@ -367,44 +367,65 @@ Je commence tout de suite ! 🚀`;
 
             const projectWorkspace = gitService.getProjectWorkspace(projectKey);
             
-            const results = [];
+            const reposSetup = [];
+            const setupResults = [];
 
             for (const repoUrl of (project.repos || [])) {
                 const setup = await gitService.setupRepo(repoUrl, projectWorkspace, branchName, baseBranch);
-                
-                if (!setup.success) {
-                    results.push({ code: 1, repo: setup.repoName, error: setup.error, cost: '0.00$', tokens: '0' });
-                    continue;
+                if (setup.success) {
+                    reposSetup.push(setup);
+                } else {
+                    setupResults.push({ code: 1, repo: setup.repoName, error: setup.error, cost: '0.00$', tokens: '0' });
                 }
+            }
 
-                const result = await junieService.run(setup.localPath, instruction, apiKey);
-                
-                if (result.code === 0) {
+            if (reposSetup.length === 0) {
+                await this.finalizeTrelloCard(cardId, project, setupResults, credentials);
+                return;
+            }
+
+            // Un seul appel à Junie pour tout le workspace
+            const junieResult = await junieService.run(projectWorkspace, instruction, apiKey);
+            
+            const results = [...setupResults];
+
+            for (let i = 0; i < reposSetup.length; i++) {
+                const setup = reposSetup[i];
+                const repoResult = { 
+                    repo: setup.repoName, 
+                    code: junieResult.code, 
+                    error: junieResult.error,
+                    // On n'attribue le coût qu'au premier dépôt pour éviter de le multiplier dans le résumé Trello
+                    cost: i === 0 ? junieResult.cost : '0.00$',
+                    tokens: i === 0 ? junieResult.tokens : '0'
+                };
+
+                if (junieResult.code === 0) {
                     // Commit des changements (inclut git add -A en interne)
                     const commitMsg = `Junie: ${card.name} (Trello #${card.idShort})`;
                     const committed = await gitService.commit(setup.localPath, commitMsg);
 
                     if (committed) {
                         // Récupération des statistiques du diff après le commit
-                        result.diffStat = await gitService.getDiffStat(setup.localPath, baseBranch);
+                        repoResult.diffStat = await gitService.getDiffStat(setup.localPath, baseBranch);
                         
                         // Push des changements sur la branche distante
                         if (await gitService.push(setup.localPath, branchName)) {
-                            result.code = 0; // Succès réel
+                            repoResult.code = 0; // Succès réel
                         } else {
-                            result.code = 1;
-                            result.error = 'Push Git impossible';
+                            repoResult.code = 1;
+                            repoResult.error = 'Push Git impossible';
                         }
                     } else {
-                        result.code = 1;
-                        result.error = 'Commit Git impossible (aucun changement ou erreur)';
+                        repoResult.code = 1;
+                        repoResult.error = 'Commit Git impossible';
                     }
 
                     // Retour sur branche de base (en forçant pour être sûr)
                     await gitService.checkout(setup.localPath, baseBranch, true);
                 }
 
-                results.push(result);
+                results.push(repoResult);
             }
 
             await this.finalizeTrelloCard(cardId, project, results, credentials);
