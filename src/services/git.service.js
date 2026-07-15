@@ -223,6 +223,28 @@ class GitService {
             return "Erreur lors de la récupération des statistiques diff.";
         }
     }
+
+    async hasDependencyChanges(cwd, baseBranch = 'develop') {
+        try {
+            if (config.DRY_RUN) return false;
+
+            const env = this.buildGitEnvironment();
+            const result = spawnSync('git', ['diff', '--name-only', baseBranch], {
+                cwd,
+                env,
+                encoding: 'utf8',
+                timeout: config.GIT.COMMAND_TIMEOUT_MS,
+            });
+            if (result.error) throw result.error;
+
+            const files = result.stdout.split('\n');
+            const depFiles = ['package.json', 'package-lock.json', 'yarn.lock', 'composer.json', 'composer.lock'];
+            return files.some(file => depFiles.includes(file.trim()));
+        } catch (e) {
+            console.error(`[Git Error] Failed to check dependency changes: ${e.message}`);
+            return false;
+        }
+    }
 }
 
 module.exports = new GitService();

@@ -6,7 +6,7 @@ class GithubService {
         this.defaultWorkflow = 'build_deploy_review.yml';
     }
 
-    async triggerReviewWorkflow(repoUrl, branchName) {
+    async triggerReviewWorkflow(repoUrl, branchName, needsInstall = true) {
         const repoPath = this.parseRepoPath(repoUrl);
         if (!repoPath) {
             throw new Error(`Impossible d'analyser le chemin du dépôt à partir de l'URL : ${repoUrl}`);
@@ -19,16 +19,16 @@ class GithubService {
 
         const url = `https://api.github.com/repos/${repoPath}/actions/workflows/${this.defaultWorkflow}/dispatches`;
         
-        console.log(`[GitHub] Déclenchement du workflow de review pour ${repoPath} sur la branche ${branchName}`);
+        console.log(`[GitHub] Déclenchement du workflow de review pour ${repoPath} sur la branche ${branchName} (Install: ${needsInstall ? 'Oui' : 'Non'})`);
         
         const trigger = async (withInputs = true) => {
             const payload = { ref: branchName };
             if (withInputs) {
-                payload.inputs = { installer: 'Oui' };
+                payload.inputs = { installer: needsInstall ? 'Oui' : 'Non' };
             }
 
             if (config.DRY_RUN) {
-                console.log(`[GitHub] [DRY RUN] Appel POST vers ${url} avec ref: ${branchName}${withInputs ? ' et inputs: { installer: \'Oui\' }' : ''}`);
+                console.log(`[GitHub] [DRY RUN] Appel POST vers ${url} avec ref: ${branchName}${withInputs ? ' et inputs: { installer: \'' + (needsInstall ? 'Oui' : 'Non') + '\' }' : ''}`);
                 return true;
             }
 

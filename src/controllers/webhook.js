@@ -14,7 +14,7 @@ class WebhookController {
 
     getBranchName(card) {
         if (card.labels && card.labels.length > 0) {
-            const customLabel = card.labels.find(label => label.name && !label.name.startsWith('ENGINE-') && label.name !== 'EN REVIEW');
+            const customLabel = card.labels.find(label => label.name && !label.name.startsWith('ENGINE-') && label.name !== 'EN REVIEW' && label.name !== 'INSTALL');
             if (customLabel) {
                 const labelName = customLabel.name;
                 const branchName = labelName.startsWith('trello-') ? labelName : `trello-${labelName}`;
@@ -174,13 +174,14 @@ class WebhookController {
         try {
             const card = await trelloService.getCard(cardId, credentials);
             const branchName = this.getBranchName(card);
+            const needsInstall = card.labels && card.labels.some(label => label.name === 'INSTALL');
             
-            await trelloService.addComment(cardId, `🚀 Je lance le déploiement en review pour la branche \`${branchName}\` sur GitHub Actions...`, credentials);
+            await trelloService.addComment(cardId, `🚀 Je lance le déploiement en review pour la branche \`${branchName}\` sur GitHub Actions (Installation : ${needsInstall ? 'Oui' : 'Non'})...`, credentials);
 
             const results = [];
             for (const repoUrl of (project.repos || [])) {
                 try {
-                    const success = await githubService.triggerReviewWorkflow(repoUrl, branchName);
+                    const success = await githubService.triggerReviewWorkflow(repoUrl, branchName, needsInstall);
                     results.push({ repo: repoUrl, success });
                 } catch (err) {
                     results.push({ repo: repoUrl, success: false, error: err.message });
@@ -430,6 +431,7 @@ Je commence tout de suite ! 🚀`;
                     if (committed) {
                         // Récupération des statistiques du diff après le commit
                         repoResult.diffStat = await gitService.getDiffStat(setup.localPath, baseBranch);
+                        repoResult.hasDependencyChanges = await gitService.hasDependencyChanges(setup.localPath, baseBranch);
                         
                         // Push des changements sur la branche distante
                         if (await gitService.push(setup.localPath, branchName)) {
@@ -448,6 +450,16 @@ Je commence tout de suite ! 🚀`;
                 }
 
                 results.push(repoResult);
+            }
+
+            // Si un des dépôts a des changements de dépendances, on ajoute le label INSTALL
+            const hasAnyDependencyChanges = results.some(r => r.hasDependencyChanges);
+            if (hasAnyDependencyChanges) {
+                const card = await trelloService.getCard(cardId, credentials);
+                const hasInstallLabel = card.labels && card.labels.some(l => l.name === 'INSTALL');
+                if (!hasInstallLabel) {
+                    await trelloService.addLabel(cardId, 'INSTALL', credentials);
+                }
             }
 
             await this.finalizeTrelloCard(cardId, project, results, credentials);
