@@ -178,36 +178,24 @@ class GitService {
 
         if (checkoutBranch.success) {
             console.log(`[Git] Branche ${branchName} trouvée, utilisation de la branche existante.`);
-            // Si ce n'est pas la branche de base, on essaie de pull les nouveautés
-            if (branchName !== baseBranch) {
-                await this.runCommand('git', ['pull', 'origin', branchName], localPath);
+            // On essaie de pull les nouveautés depuis le serveur
+            // Si c'est une nouvelle branche locale pas encore sur le serveur, ça peut échouer sans gravité
+            const pull = await this.runCommand('git', ['pull', 'origin', branchName], localPath);
+            if (!pull.success) {
+                console.log(`[Git] Note: pull impossible pour ${branchName} (peut-être pas encore sur le serveur)`);
             }
             return { success: true, repoName, localPath };
         }
 
         // 3. Sinon, on repart de la branche de base pour la créer
-        console.log(`[Git] Branche ${branchName} non trouvée, création à partir de ${baseBranch}...`);
+        console.log(`[Git] Branche ${branchName} non trouvée, création à partir de origin/${baseBranch}...`);
         
-        const checkoutBase = await this.runCommand('git', ['checkout', '-f', baseBranch], localPath);
-        if (!checkoutBase.success) {
-            return { success: false, repoName, error: `Checkout ${baseBranch} failed: ${checkoutBase.stderr || checkoutBase.error}` };
-        }
+        // On crée la branche directement à partir de origin/baseBranch pour être sûr d'être à jour avec le serveur
+        // Cela évite de partir d'une version locale de develop qui pourrait ne pas être à jour.
+        const createBranch = await this.runCommand('git', ['checkout', '-b', branchName, `origin/${baseBranch}`], localPath);
         
-        // Pull latest from base branch
-        await this.runCommand('git', ['pull', 'origin', baseBranch], localPath);
-
-        // Create and checkout new branch
-        const createBranch = await this.runCommand('git', ['checkout', '-b', branchName], localPath);
         if (!createBranch.success) {
-            // Si l'erreur est "already exists", on tente un checkout simple avant d'abandonner
-            if (createBranch.stderr?.includes('already exists') || createBranch.stdout?.includes('already exists')) {
-                console.log(`[Git] Branche ${branchName} déjà existante localement, basculement...`);
-                const retryCheckout = await this.runCommand('git', ['checkout', '-f', branchName], localPath);
-                if (retryCheckout.success) {
-                    return { success: true, repoName, localPath };
-                }
-            }
-            return { success: false, repoName, error: `Failed to create branch ${branchName}: ${createBranch.stderr || createBranch.error}` };
+            return { success: false, repoName, error: `Failed to create branch ${branchName} from origin/${baseBranch}: ${createBranch.stderr || createBranch.error}` };
         }
         
         // Pousser la branche immédiatement sur le dépôt distant (si différente de base)
