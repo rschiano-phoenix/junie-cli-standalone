@@ -58,7 +58,18 @@ get_container_name() {
   local ssh_user="$1"
   local host="$2"
   local prefix="$3"
-  run_cmd "$ssh_user" "$host" "docker ps --format '{{.Names}}'" | grep "^$prefix" | head -n 1
+  local containers
+  containers=$(run_cmd "$ssh_user" "$host" "docker ps --format '{{.Names}}'")
+  
+  # On cherche d'abord un match exact avec le préfixe du JSON
+  local exact_match
+  exact_match=$(echo "$containers" | grep -x "$prefix" | head -n 1)
+  if [[ -n "$exact_match" ]]; then
+    echo "$exact_match"
+  else
+    # Sinon on cherche un container qui commence par ce préfixe
+    echo "$containers" | grep "^$prefix" | head -n 1
+  fi
 }
 
 # Récupère les infos de DB depuis le .env du container
@@ -67,86 +78,99 @@ get_db_from_env() {
   local host="$2"
   local container="$3"
 
-  # On récupère le contenu du .env (on suppose qu'il est à la racine de l'app dans le container)
+  # On récupère le contenu du .env ou les variables d'environnement
   local env_content
+  # Tentative 1 : fichier .env
   env_content=$(run_cmd "$ssh_user" "$host" "docker exec $container cat .env" 2>/dev/null || echo "")
+
+  # Tentative 2 : commande env si .env vide ou ne contient pas DB_
+  if [[ -z "$env_content" || ! "$env_content" =~ "DB_" ]]; then
+    env_content=$(run_cmd "$ssh_user" "$host" "docker exec $container env" 2>/dev/null || echo "")
+  fi
 
   if [[ -z "$env_content" ]]; then
     return
   fi
 
-  # Extraction des variables (supporte plusieurs formats courants)
-  local db_host=$(echo "$env_content" | grep -E "^DB_HOST=" | head -n 1 | cut -d'=' -f2- | tr -d '\r' | xargs echo)
-  local db_name=$(echo "$env_content" | grep -E "^(DB_DATABASE|DB_NAME)=" | head -n 1 | cut -d'=' -f2- | tr -d '\r' | xargs echo)
-  local db_user=$(echo "$env_content" | grep -E "^(DB_USERNAME|DB_USER)=" | head -n 1 | cut -d'=' -f2- | tr -d '\r' | xargs echo)
-  local db_pass=$(echo "$env_content" | grep -E "^(DB_PASSWORD|DB_PASS)=" | head -n 1 | cut -d'=' -f2- | tr -d '\r' | xargs echo)
+  # Extraction des variables
+  extract_var() {
+    local content="$1"
+    local pattern="$2"
+    echo "$content" | grep -E "^\s*($pattern)\s*=" | head -n 1 | cut -d'=' -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" | tr -d '\r'
+  }
+
+  local db_host=$(extract_var "$env_content" "DB_HOST")
+  local db_name=$(extract_var "$env_content" "DB_DATABASE|DB_NAME")
+  local db_user=$(extract_var "$env_content" "DB_USERNAME|DB_USER")
+  local db_pass=$(extract_var "$env_content" "DB_PASSWORD|DB_PASS")
 
   # Valeurs par défaut
   [[ -z "$db_host" ]] && db_host="localhost"
+
+  # Si on n'a pas au moins le nom de la base et l'utilisateur, on considère que l'auto-détection a échoué
+  if [[ -z "$db_name" || -z "$db_user" ]]; then
+    return
+  fi
 
   echo "$db_host|$db_name|$db_user|$db_pass"
 }
 
 echo "🔁 Copie de '$SOURCE_ENV' vers '$TARGET_ENV' pour le projet '$PROJECT_NAME'..."
 
-# Si une branche est spécifiée, on l'ajoute au préfixe (utile pour les environnements de review)
-if [[ -n "$BRANCH_NAME" ]]; then
-  TO_PREFIX="${TO_PREFIX}-${BRANCH_NAME}"
-fi
+# Récupération des informations (avec retry si le container n'est pas encore prêt)
+MAX_TRIES=5
+SLEEP_TIME=60
 
-# Récupération des noms de containers
-FROM_CONTAINER=$(get_container_name "$FROM_SSH_USER" "$FROM_HOST" "$FROM_PREFIX")
-TO_CONTAINER=$(get_container_name "$TO_SSH_USER" "$TO_HOST" "$TO_PREFIX")
+for ((i=1; i<=MAX_TRIES; i++)); do
+  echo "🔍 [Tentative $i/$MAX_TRIES] Récupération des containers et de la configuration DB..."
 
-if [[ -z "$FROM_CONTAINER" ]]; then
-  echo "❌ Container source non trouvé pour le préfixe '$FROM_PREFIX' sur ${FROM_HOST:-localhost}"
-  exit 1
-fi
+  FROM_CONTAINER=$(get_container_name "$FROM_SSH_USER" "$FROM_HOST" "$FROM_PREFIX")
+  TO_CONTAINER=$(get_container_name "$TO_SSH_USER" "$TO_HOST" "$TO_PREFIX")
 
-if [[ -z "$TO_CONTAINER" ]]; then
-  echo "❌ Container cible non trouvé pour le préfixe '$TO_PREFIX' sur ${TO_HOST:-localhost}"
-  exit 1
-fi
+  if [[ -n "$FROM_CONTAINER" && -n "$TO_CONTAINER" ]]; then
+    # Récupération des infos de DB depuis les containers (.env)
+    FROM_DB_INFO=$(get_db_from_env "$FROM_SSH_USER" "$FROM_HOST" "$FROM_CONTAINER")
+    if [[ -n "$FROM_DB_INFO" ]]; then
+      IFS='|' read -r FROM_DB_HOST FROM_DB_NAME FROM_DB_USER FROM_DB_PASSWORD <<< "$FROM_DB_INFO"
+      echo "✅ Configuration DB source récupérée depuis le container"
+    else
+      FROM_DB_HOST="${FROM_DB_HOST_FALLBACK:-localhost}"
+      FROM_DB_NAME="$FROM_DB_NAME_FALLBACK"
+      FROM_DB_USER="$FROM_DB_USER_FALLBACK"
+      FROM_DB_PASSWORD="$FROM_DB_PASSWORD_FALLBACK"
+      echo "ℹ️ Auto-détection incomplète ou échouée, utilisation du fallback pour la DB source"
+    fi
 
-# Récupération des infos de DB depuis les containers (.env)
-echo "🔍 Récupération de la configuration DB depuis les containers..."
+    TO_DB_INFO=$(get_db_from_env "$TO_SSH_USER" "$TO_HOST" "$TO_CONTAINER")
+    if [[ -n "$TO_DB_INFO" ]]; then
+      IFS='|' read -r TO_DB_HOST TO_DB_NAME TO_DB_USER TO_DB_PASSWORD <<< "$TO_DB_INFO"
+      echo "✅ Configuration DB cible récupérée depuis le container"
+    else
+      TO_DB_HOST="${TO_DB_HOST_FALLBACK:-localhost}"
+      TO_DB_NAME="$TO_DB_NAME_FALLBACK"
+      TO_DB_USER="$TO_DB_USER_FALLBACK"
+      TO_DB_PASSWORD="$TO_DB_PASSWORD_FALLBACK"
+      echo "ℹ️ Auto-détection incomplète ou échouée, utilisation du fallback pour la DB cible"
+    fi
 
-FROM_DB_INFO=$(get_db_from_env "$FROM_SSH_USER" "$FROM_HOST" "$FROM_CONTAINER")
-if [[ -n "$FROM_DB_INFO" ]]; then
-  IFS='|' read -r FROM_DB_HOST FROM_DB_NAME FROM_DB_USER FROM_DB_PASSWORD <<< "$FROM_DB_INFO"
-  echo "✅ Configuration DB source récupérée depuis le .env du container"
-else
-  # Fallback sur les paramètres fournis si pas de .env
-  FROM_DB_HOST="$FROM_DB_HOST_FALLBACK"
-  FROM_DB_NAME="$FROM_DB_NAME_FALLBACK"
-  FROM_DB_USER="$FROM_DB_USER_FALLBACK"
-  FROM_DB_PASSWORD="$FROM_DB_PASSWORD_FALLBACK"
-  echo "ℹ️ Utilisation de la configuration DB source fournie en paramètre (fallback)"
-fi
+    # Vérification si on a assez d'infos
+    if [[ -n "$FROM_DB_NAME" && -n "$FROM_DB_USER" && -n "$TO_DB_NAME" && -n "$TO_DB_USER" ]]; then
+      break
+    fi
+  fi
 
-TO_DB_INFO=$(get_db_from_env "$TO_SSH_USER" "$TO_HOST" "$TO_CONTAINER")
-if [[ -n "$TO_DB_INFO" ]]; then
-  IFS='|' read -r TO_DB_HOST TO_DB_NAME TO_DB_USER TO_DB_PASSWORD <<< "$TO_DB_INFO"
-  echo "✅ Configuration DB cible récupérée depuis le .env du container"
-else
-  # Fallback sur les paramètres fournis si pas de .env
-  TO_DB_HOST="$TO_DB_HOST_FALLBACK"
-  TO_DB_NAME="$TO_DB_NAME_FALLBACK"
-  TO_DB_USER="$TO_DB_USER_FALLBACK"
-  TO_DB_PASSWORD="$TO_DB_PASSWORD_FALLBACK"
-  echo "ℹ️ Utilisation de la configuration DB cible fournie en paramètre (fallback)"
-fi
-
-# Validation des paramètres de connexion
-if [[ -z "$FROM_DB_NAME" || -z "$FROM_DB_USER" ]]; then
-  echo "❌ Paramètres de base de données SOURCE incomplets (Host: $FROM_DB_HOST, DB: $FROM_DB_NAME, User: $FROM_DB_USER)"
-  exit 1
-fi
-
-if [[ -z "$TO_DB_NAME" || -z "$TO_DB_USER" ]]; then
-  echo "❌ Paramètres de base de données CIBLE incomplets (Host: $TO_DB_HOST, DB: $TO_DB_NAME, User: $TO_DB_USER)"
-  exit 1
-fi
+  if [[ $i -lt $MAX_TRIES ]]; then
+    echo "⏳ Containers ou configuration incomplets. Nouvelle tentative dans ${SLEEP_TIME}s..."
+    sleep $SLEEP_TIME
+  else
+    echo "❌ Échec après $MAX_TRIES tentatives."
+    echo "ℹ️ Containers identifiés : Source=${FROM_CONTAINER:-NON TROUVÉ}, Cible=${TO_CONTAINER:-NON TROUVÉ}"
+    echo "❌ Paramètres de base de données incomplets :"
+    echo "   - Source (DB_Host: $FROM_DB_HOST, DB_Name: $FROM_DB_NAME, DB_User: $FROM_DB_USER)"
+    echo "   - Cible  (DB_Host: $TO_DB_HOST, DB_Name: $TO_DB_NAME, DB_User: $TO_DB_USER)"
+    exit 1
+  fi
+done
 
 FILENAME="/tmp/dump_$FROM_PREFIX.sql"
 GZIP_FILENAME="$FILENAME.gz"
@@ -186,7 +210,7 @@ echo "📥 Import dans la base '$TO_DB_NAME'..."
 run_cmd "$TO_SSH_USER" "$TO_HOST" \
   "docker cp $GZIP_FILENAME $TO_CONTAINER:$GZIP_FILENAME"
 run_cmd "$TO_SSH_USER" "$TO_HOST" \
-  "docker exec $TO_CONTAINER bash -c 'zcat $GZIP_FILENAME | mysql -h$TO_DB_HOST -u$TO_DB_USER -p$TO_DB_PASSWORD $TO_DB_NAME'"
+  "docker exec $TO_CONTAINER sh -c 'zcat $GZIP_FILENAME | mysql -h$TO_DB_HOST -u$TO_DB_USER -p$TO_DB_PASSWORD $TO_DB_NAME'"
 
 # Nettoyage
 echo "🧹 Nettoyage..."
