@@ -16,8 +16,13 @@ class GitService {
         }
     }
 
-    getProjectWorkspace(projectName) {
-        const projectPath = path.join(this.workspaceDir, sanitizeName(projectName));
+    getProjectWorkspace(projectName, branchName = null) {
+        let folderName = sanitizeName(projectName);
+        if (branchName) {
+            folderName += `-${sanitizeName(branchName)}`;
+        }
+        
+        const projectPath = path.join(this.workspaceDir, folderName);
         if (config.DRY_RUN) {
             console.log(`[Git] [DRY RUN] Would ensure workspace: ${projectPath}`);
             return projectPath;
@@ -27,6 +32,27 @@ class GitService {
             fs.mkdirSync(projectPath, { recursive: true });
         }
         return projectPath;
+    }
+
+    removeWorkspace(workspacePath) {
+        if (!workspacePath || !workspacePath.startsWith(this.workspaceDir)) {
+            console.error(`[Git] Invalid workspace path to remove: ${workspacePath}`);
+            return;
+        }
+
+        if (config.DRY_RUN) {
+            console.log(`[Git] [DRY RUN] Would remove workspace: ${workspacePath}`);
+            return;
+        }
+
+        try {
+            if (fs.existsSync(workspacePath)) {
+                console.log(`[Git] Removing workspace: ${workspacePath}`);
+                fs.rmSync(workspacePath, { recursive: true, force: true });
+            }
+        } catch (e) {
+            console.error(`[Git Error] Failed to remove workspace ${workspacePath}: ${e.message}`);
+        }
     }
 
     async runCommand(command, args = [], cwd) {

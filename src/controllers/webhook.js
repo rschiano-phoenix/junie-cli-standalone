@@ -332,6 +332,8 @@ class WebhookController {
         this.activeProjects.add(projectKey);
         res.sendStatus(200); // Ack Trello early
 
+        let projectWorkspace = null;
+
         try {
             const card = await trelloService.getCard(cardId, credentials);
             let instruction = card.desc || card.name;
@@ -354,8 +356,9 @@ class WebhookController {
                 await trelloService.moveCard(cardId, inProgressListId, credentials);
             }
 
-            // Add plan comment
             const branchName = this.getBranchName(card);
+            projectWorkspace = gitService.getProjectWorkspace(projectKey, branchName);
+            
             const reposText = (project.repos || []).map(r => `- ${r}`).join('\n');
             const introMsg = type === 'improve' ? "Je vais appliquer les modifications demandées !" : "Je m'occupe de ce ticket.";
             const planComment = `👋 Bonjour ! ${introMsg}
@@ -388,7 +391,7 @@ Je commence tout de suite ! 🚀`;
                 return;
             }
 
-            const projectWorkspace = gitService.getProjectWorkspace(projectKey);
+            // On ne cherche plus le workspace ici puisqu'il est créé juste au-dessus avec la branche
             
             const reposSetup = [];
             const setupResults = [];
@@ -467,6 +470,9 @@ Je commence tout de suite ! 🚀`;
         } catch (err) {
             console.error(`[Webhook Error]`, err.message);
         } finally {
+            if (projectWorkspace) {
+                gitService.removeWorkspace(projectWorkspace);
+            }
             this.activeProjects.delete(projectKey);
         }
     }

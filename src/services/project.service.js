@@ -69,26 +69,19 @@ class ProjectService {
     }
 
     async initializeProjects(gitService) {
-        console.log(`[${new Date().toISOString()}] Initialisation des espaces de travail des projets...`);
+        console.log(`[${new Date().toISOString()}] Initialisation des projets...`);
         const projects = this.loadProjects();
         
         for (const project of projects) {
             const projectKey = project.name || project.trello.boardId || 'unknown';
-            const baseBranch = project.baseBranch || 'develop';
 
             if (config.DRY_RUN) {
                 this.logWebhookCommand(project);
             }
-
-            const projectWorkspace = gitService.getProjectWorkspace(projectKey);
             
-            console.log(`[Init] Configuration du projet : ${projectKey}`);
-            
-            for (const repoUrl of (project.repos || [])) {
-                // Pour l'initialisation, on se contente de préparer le repo sur la branche de base
-                // On utilise setupRepo avec branchName = baseBranch pour éviter de créer une branche trello-xxx inutile
-                await gitService.setupRepo(repoUrl, projectWorkspace, baseBranch, baseBranch);
-            }
+            console.log(`[Init] Projet configuré : ${projectKey}`);
+            // Note: On ne récupère plus les dépôts au démarrage pour économiser de l'espace
+            // Ils seront récupérés à la demande dans des dossiers isolés par ticket.
         }
         console.log(`[${new Date().toISOString()}] Initialisation terminée.`);
     }
