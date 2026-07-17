@@ -55,11 +55,38 @@ class TrelloService {
         });
     }
 
+    async getBoardLabels(boardId, credentials) {
+        const response = await axios.get(`https://api.trello.com/1/boards/${encodeURIComponent(boardId)}/labels`, {
+            params: this.buildAuthParams(credentials),
+        });
+        return response.data;
+    }
+
     async addLabel(cardId, labelName, credentials) {
         if (config.DRY_RUN) {
             console.log(`[Trello] [DRY RUN] Would add label "${labelName}" to card ${cardId}`);
             return { status: 200, data: {} };
         }
+
+        try {
+            // Pour éviter de créer des doublons de labels sur le board, on vérifie d'abord s'il existe déjà
+            const card = await this.getCard(cardId, credentials);
+            const boardLabels = await this.getBoardLabels(card.idBoard, credentials);
+            
+            const existingLabel = boardLabels.find(l => l.name && l.name.trim().toLowerCase() === labelName.toLowerCase());
+            
+            if (existingLabel) {
+                // Si le label existe sur le board, on l'ajoute à la carte via son ID
+                // Note: Si la carte a déjà ce label, Trello ignorera l'appel sans erreur
+                return axios.post(`https://api.trello.com/1/cards/${encodeURIComponent(cardId)}/idLabels`, { value: existingLabel.id }, {
+                    params: this.buildAuthParams(credentials),
+                });
+            }
+        } catch (err) {
+            console.warn(`[Trello] Warning while checking existing labels: ${err.message}. Falling back to default addLabel.`);
+        }
+
+        // Si le label n'existe pas sur le board (ou erreur), on laisse Trello le créer et l'ajouter
         return axios.post(`https://api.trello.com/1/cards/${encodeURIComponent(cardId)}/labels`, { name: labelName }, {
             params: this.buildAuthParams(credentials),
         });
